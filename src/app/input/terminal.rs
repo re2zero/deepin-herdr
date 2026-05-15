@@ -66,30 +66,43 @@ impl App {
         let pane_id = ws.focused_pane_id()?;
         let rt = ws.runtimes.get(&pane_id)?;
 
-        // Intercept PageUp/PageDown for pane scrollback when the focused pane
-        // doesn't handle its own scrolling (e.g., a plain shell with mouse off).
+        // Intercept plain PageUp/PageDown presses for pane scrollback when the
+        // focused pane doesn't handle its own scrolling (e.g., a plain shell
+        // with mouse off). Modified page keys are pane shortcuts, and release
+        // events should not produce a second host-scroll action.
         // Only intercept when we know the pane state; if input_state is unknown,
         // fail-open and forward the key to the pane.
-        if matches!(key_event.code, KeyCode::PageUp | KeyCode::PageDown) {
+        if matches!(key_event.code, KeyCode::PageUp | KeyCode::PageDown)
+            && key_event.modifiers.is_empty()
+        {
             if let Some(input_state) = rt.input_state() {
                 if !input_state.alternate_screen && !input_state.mouse_reporting_enabled() {
-                    let lines = self
-                        .state
-                        .pane_info_by_id(pane_id)
-                        .map(|info| info.inner_rect.height as usize)
-                        .unwrap_or(10)
-                        .max(1);
-                    if key_event.code == KeyCode::PageUp {
-                        self.state.scroll_pane_up(pane_id, lines);
-                    } else {
-                        self.state.scroll_pane_down(pane_id, lines);
+                    if key_event.kind == crossterm::event::KeyEventKind::Release {
+                        return None;
                     }
-                    debug!(
-                        code = ?key_event.code,
-                        lines,
-                        "intercepted page key for pane scrollback"
-                    );
-                    return None;
+                    if matches!(
+                        key_event.kind,
+                        crossterm::event::KeyEventKind::Press
+                            | crossterm::event::KeyEventKind::Repeat
+                    ) {
+                        let lines = self
+                            .state
+                            .pane_info_by_id(pane_id)
+                            .map(|info| info.inner_rect.height as usize)
+                            .unwrap_or(10)
+                            .max(1);
+                        if key_event.code == KeyCode::PageUp {
+                            self.state.scroll_pane_up(pane_id, lines);
+                        } else {
+                            self.state.scroll_pane_down(pane_id, lines);
+                        }
+                        debug!(
+                            code = ?key_event.code,
+                            lines,
+                            "intercepted page key for pane scrollback"
+                        );
+                        return None;
+                    }
                 }
             }
         }
@@ -152,7 +165,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEventKind};
+    use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
     use ratatui::layout::Rect;
 
     use super::super::{app_for_mouse_test, mouse, numbered_lines_bytes};
@@ -548,6 +561,86 @@ mod tests {
             .and_then(crate::pane::PaneRuntime::scroll_metrics)
             .expect("scroll metrics after PageDown");
         assert_eq!(after_down.offset_from_bottom, 0);
+    }
+
+    #[tokio::test]
+    async fn page_up_release_does_not_scroll_plain_shell_pane_again() {
+        let mut app = app_for_mouse_test();
+        let mut ws = Workspace::test_new("test");
+        let pane_id = ws.tabs[0].root_pane;
+        let pane_infos = ws.tabs[0].layout.panes(Rect::new(26, 2, 80, 18));
+        let info = pane_infos[0].clone();
+        ws.tabs[0].runtimes.insert(
+            pane_id,
+            crate::pane::PaneRuntime::test_with_scrollback_bytes(
+                info.inner_rect.width,
+                info.inner_rect.height,
+                16 * 1024,
+                &numbered_lines_bytes(64),
+            ),
+        );
+
+        app.state.workspaces = vec![ws];
+        app.state.active = Some(0);
+        app.state.selected = 0;
+        app.state.mode = Mode::Terminal;
+        app.state.view.pane_infos = pane_infos;
+
+        app.handle_terminal_key_headless(TerminalKey::new(KeyCode::PageUp, KeyModifiers::empty()));
+        let after_press = app.state.workspaces[0]
+            .runtime(pane_id)
+            .and_then(crate::pane::PaneRuntime::scroll_metrics)
+            .expect("scroll metrics after PageUp press");
+        assert_eq!(
+            after_press.offset_from_bottom,
+            info.inner_rect.height as usize
+        );
+
+        app.handle_terminal_key_headless(
+            TerminalKey::new(KeyCode::PageUp, KeyModifiers::empty())
+                .with_kind(KeyEventKind::Release),
+        );
+
+        let after_release = app.state.workspaces[0]
+            .runtime(pane_id)
+            .and_then(crate::pane::PaneRuntime::scroll_metrics)
+            .expect("scroll metrics after PageUp release");
+        assert_eq!(
+            after_release.offset_from_bottom,
+            after_press.offset_from_bottom
+        );
+    }
+
+    #[tokio::test]
+    async fn modified_page_up_does_not_host_scroll_plain_shell_pane() {
+        let mut app = app_for_mouse_test();
+        let mut ws = Workspace::test_new("test");
+        let pane_id = ws.tabs[0].root_pane;
+        let pane_infos = ws.tabs[0].layout.panes(Rect::new(26, 2, 80, 18));
+        let info = pane_infos[0].clone();
+        ws.tabs[0].runtimes.insert(
+            pane_id,
+            crate::pane::PaneRuntime::test_with_scrollback_bytes(
+                info.inner_rect.width,
+                info.inner_rect.height,
+                16 * 1024,
+                &numbered_lines_bytes(64),
+            ),
+        );
+
+        app.state.workspaces = vec![ws];
+        app.state.active = Some(0);
+        app.state.selected = 0;
+        app.state.mode = Mode::Terminal;
+        app.state.view.pane_infos = pane_infos;
+
+        app.handle_terminal_key_headless(TerminalKey::new(KeyCode::PageUp, KeyModifiers::CONTROL));
+
+        let metrics = app.state.workspaces[0]
+            .runtime(pane_id)
+            .and_then(crate::pane::PaneRuntime::scroll_metrics)
+            .expect("scroll metrics after modified PageUp");
+        assert_eq!(metrics.offset_from_bottom, 0);
     }
 
     #[tokio::test]
