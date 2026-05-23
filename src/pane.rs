@@ -1375,9 +1375,18 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "macOS keeps short-lived PTY fallback commands alive under portable_pty"
+    )]
     fn restore_wrapper_falls_back_after_early_resume_failure() {
+        #[cfg(target_os = "macos")]
+        let true_cmd = "/usr/bin/true";
+        #[cfg(not(target_os = "macos"))]
+        let true_cmd = "/bin/true";
+
         let argv = vec!["/bin/sh".into(), "-c".into(), "exit 7".into()];
-        let cmd = restore_command_builder("codex", "/bin/true", &argv);
+        let cmd = restore_command_builder("codex", true_cmd, &argv);
         let (success, output) = capture_command_output(cmd);
 
         assert!(success, "fallback command should own the final exit status");
