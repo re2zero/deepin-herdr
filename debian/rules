@@ -1,6 +1,21 @@
 #!/usr/bin/make -f
+include /usr/share/dpkg/default.mk
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# Detect installed Qt version, prefer Qt6, fallback to Qt5
+define detect_qt_version
+ifneq (,$(shell which qmake6 2>/dev/null))
+    QT_DIR="/usr/lib/$(DEB_HOST_MULTIARCH)/cmake/Qt6"
+else
+    QT_DIR="/usr/lib/$(DEB_HOST_MULTIARCH)/cmake/Qt5"
+endif
+endef
+
+$(eval $(call detect_qt_version))
+
+# hardcode this if want to force build with specific Qt version
+# QT_DIR="/usr/lib/$(DEB_HOST_MULTIARCH)/cmake/Qt5"
 
 %:
 	dh $@
@@ -8,7 +23,9 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 override_dh_auto_configure:
 	dh_auto_configure -- \
 		-DCMAKE_BUILD_TYPE=Release \
-		-DCMAKE_INSTALL_PREFIX=/usr
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DQT_DIR=$(QT_DIR) \
+		-DAPP_VERSION=$(DEB_VERSION_UPSTREAM)
 
 override_dh_auto_test:
 	@echo "Skipping tests"

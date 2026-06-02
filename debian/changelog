@@ -1,3 +1,15 @@
+deepin-herdr (0.2.0) unstable; urgency=medium
+
+  * Bind terminal color scheme to theme: dark=Theme7, light=Theme10.
+  * Fix translation context mismatch for application description.
+  * Add StartupWMClass to .desktop for dock icon matching.
+  * Fix stale socket detection when herdr exits abnormally.
+  * Support Qt5/Qt6 dual build via QT_DIR cmake variable.
+  * Clean up freopen stdout/stderr redirection.
+  * Use DApplication::loadTranslator() for translation loading.
+
+ -- re2zero <yangwu@uniontech.com>  Tue, 02 Jun 2026 15:30:00 +0800
+
 deepin-herdr (0.1.0) unstable; urgency=medium
 
   * Initial release.

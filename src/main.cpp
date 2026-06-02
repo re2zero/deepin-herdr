@@ -2,6 +2,7 @@
 #include <QtGlobal>
 #include <DApplication>
 
+#include "version.h"
 #include "mainwindow.h"
 
 DWIDGET_USE_NAMESPACE
@@ -21,7 +22,7 @@ int main(int argc, char *argv[]) {
 
     app.setApplicationName("deepin-herdr");
     app.setApplicationDisplayName("deepin-herdr");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion(APP_VERSION);
     app.setOrganizationName("deepin");
     app.setProductIcon(QIcon::fromTheme("deepin-herdr"));
     app.setApplicationDescription(
