@@ -7,6 +7,7 @@
 class QTermWidget;
 class QTimer;
 class QNetworkReply;
+class QFont;
 
 DWIDGET_USE_NAMESPACE
 
@@ -39,6 +40,7 @@ private:
     QTermWidget *m_terminal;
     QTimer *m_launchTimer;
     int m_launchAttempts;
+    QFont m_originalFont;
 };
 
 #endif // MAINWINDOW_H

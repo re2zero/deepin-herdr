@@ -15,6 +15,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPointer>
+#include <QShortcut>
 
 #include <QLocalSocket>
 
@@ -71,9 +72,31 @@ void MainWindow::initUI()
 
     m_terminal = new QTermWidget(0, centralWidget);
     layout->addWidget(m_terminal);
+    m_originalFont = m_terminal->getTerminalFont();
 
     setCentralWidget(centralWidget);
     Dtk::Widget::moveToCenter(this);
+
+    auto bindKey = [this](const QKeySequence &key, auto slot) {
+        auto *s = new QShortcut(key, m_terminal);
+        connect(s, &QShortcut::activated, m_terminal, slot);
+    };
+
+    bindKey(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C),
+        &QTermWidget::copyClipboard);
+    bindKey(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V),
+        &QTermWidget::pasteClipboard);
+    bindKey(QKeySequence(Qt::CTRL | Qt::Key_Equal),
+        &QTermWidget::zoomIn);
+    bindKey(QKeySequence(Qt::CTRL | Qt::Key_Minus),
+        &QTermWidget::zoomOut);
+    bindKey(QKeySequence(Qt::CTRL | Qt::Key_0), [this]() {
+        m_terminal->setTerminalFont(m_originalFont);
+    });
+    bindKey(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A),
+        &QTermWidget::setSelectionAll);
+    bindKey(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F),
+        &QTermWidget::toggleShowSearchBar);
 
     applyTerminalColorScheme(DGuiApplicationHelper::instance()->themeType());
     connect(DGuiApplicationHelper::instance(),
