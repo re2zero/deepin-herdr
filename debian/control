@@ -1,0 +1,34 @@
+Source: deepin-herdr
+Section: devel
+Priority: optional
+Maintainer: deepin <maintainer@deepin.org>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ pkg-config,
+ qt6-base-dev,
+ qt6-base-private-dev,
+ qt6-5compat-dev,
+ qt6-declarative-dev,
+ libdtk6core-dev,
+ libdtk6gui-dev,
+ libdtk6widget-dev,
+ libqt6qtermwidget6-dev,
+ curl,
+Standards-Version: 4.6.0
+Rules-Requires-Root: no
+
+Package: deepin-herdr
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ libdtk6widget,
+ curl,
+Description: Terminal workspace manager for AI coding agents (DTK frontend)
+ herdr is a terminal workspace manager designed for AI coding agents.
+ It provides workspace, tab, and pane management with a client-server
+ architecture.
+ .
+ This package contains the DTK GUI frontend that embeds the herdr
+ terminal client and auto-downloads the herdr binary on first launch.

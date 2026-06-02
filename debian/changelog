@@ -1,0 +1,8 @@
+deepin-herdr (0.1.0-1) unstable; urgency=medium
+
+  * Initial release.
+  * DTK6/Qt6 GUI frontend for herdr terminal workspace manager.
+  * Embeds herdr client in QTermWidget.
+  * Auto-downloads herdr binary on first launch.
+
+ -- deepin <maintainer@deepin.org>  Mon, 02 Jun 2025 00:00:00 +0800
