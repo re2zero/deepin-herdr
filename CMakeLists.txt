@@ -7,15 +7,29 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Core5Compat)
-qt_standard_project_setup()
+if(DEFINED QT_DESIRED_VERSION)
+    message(STATUS "Build with Qt${QT_DESIRED_VERSION}")
+else()
+    find_package(Qt6 COMPONENTS Core QUIET)
+    if(Qt6Core_FOUND)
+        set(QT_DESIRED_VERSION 6)
+    else()
+        find_package(Qt5 COMPONENTS Core QUIET)
+        if(Qt5Core_FOUND)
+            set(QT_DESIRED_VERSION 5)
+        else()
+            message(FATAL_ERROR "Neither Qt5 nor Qt6 found")
+        endif()
+    endif()
+endif()
 
-find_package(Dtk6Core REQUIRED)
-find_package(Dtk6Widget REQUIRED)
+message(STATUS "Using Qt${QT_DESIRED_VERSION}")
 
-# Terminal widget from deepin-terminal (terminalwidget6 - QTermWidget fork)
+find_package(Qt${QT_DESIRED_VERSION} REQUIRED COMPONENTS Core Gui Widgets Network LinguistTools)
+find_package(Dtk${QT_DESIRED_VERSION} COMPONENTS Core Widget REQUIRED)
+
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(TERMINAL_WIDGET REQUIRED terminalwidget6 IMPORTED_TARGET)
+pkg_check_modules(ICU REQUIRED icu-i18n icu-uc IMPORTED_TARGET)
 
 set(SOURCES
     src/main.cpp
@@ -26,23 +40,48 @@ set(HEADERS
     src/mainwindow.h
 )
 
-add_executable(deepin-herdr ${SOURCES} ${HEADERS})
+set(TRANSLATION_FILES
+    translations/deepin-herdr_zh_CN.ts
+)
+
+foreach(ts_file ${TRANSLATION_FILES})
+    qt_add_translation(QM_FILES ${ts_file})
+endforeach()
+
+add_executable(deepin-herdr ${SOURCES} ${HEADERS} ${QM_FILES})
 
 target_include_directories(deepin-herdr PRIVATE
-    ${TERMINAL_WIDGET_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/terminalwidget6-overlay
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/terminalwidget
 )
 
-target_link_libraries(deepin-herdr PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Core5Compat
-    Dtk6::Core
-    Dtk6::Widget
-    PkgConfig::TERMINAL_WIDGET
-)
+if(QT_DESIRED_VERSION MATCHES 6)
+    find_package(Qt6 REQUIRED COMPONENTS Core5Compat LinguistTools)
+    target_link_libraries(deepin-herdr PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Core5Compat
+        Qt6::Network
+        Dtk6::Core
+        Dtk6::Widget
+        terminalwidget6
+        PkgConfig::ICU
+    )
+elseif(QT_DESIRED_VERSION MATCHES 5)
+    find_package(Qt5 REQUIRED COMPONENTS LinguistTools)
+    target_link_libraries(deepin-herdr PRIVATE
+        Qt5::Core
+        Qt5::Gui
+        Qt5::Widgets
+        Qt5::Network
+        Dtk::Core
+        Dtk::Widget
+        terminalwidget5
+        PkgConfig::ICU
+    )
+endif()
 
 install(TARGETS deepin-herdr DESTINATION bin)
-install(FILES resources/deepin-herdr.desktop DESTINATION share/applications)
-install(FILES resources/deepin-herdr.svg DESTINATION share/icons/hicolor/scalable/apps)
+install(FILES src/assets/deepin-herdr.desktop DESTINATION share/applications)
+install(FILES src/assets/deepin-herdr.svg DESTINATION share/icons/hicolor/scalable/apps)
+install(FILES ${QM_FILES} DESTINATION share/deepin-herdr/translations)

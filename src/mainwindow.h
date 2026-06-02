@@ -5,6 +5,7 @@
 
 class QTermWidget;
 class QTimer;
+class QNetworkReply;
 
 DWIDGET_USE_NAMESPACE
 
@@ -15,11 +16,21 @@ public:
     ~MainWindow();
 
 private:
-private:
     void initUI();
+    void checkHerdrAndStart();
     void ensureServerRunning(const QString &socketPath);
     void launchClient();
     QString findHerdrBinary() const;
+    void installHerdr();
+
+    struct HerdrRelease {
+        QString version;
+        QString url;
+        QString sha256;
+    };
+
+    HerdrRelease selectRelease() const;
+    void downloadAndInstall(const HerdrRelease &release);
 
     QTermWidget *m_terminal;
     QTimer *m_launchTimer;
