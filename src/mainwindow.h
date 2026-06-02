@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <DMainWindow>
+#include <DGuiApplicationHelper>
 
 class QTermWidget;
 class QTimer;
@@ -14,6 +15,9 @@ class MainWindow : public DMainWindow {
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+private slots:
+    void applyTerminalColorScheme(DGuiApplicationHelper::ColorType themeType);
 
 private:
     void initUI();

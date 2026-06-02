@@ -16,7 +16,10 @@
 #include <QNetworkReply>
 #include <QPointer>
 
+#include <QLocalSocket>
+
 #include <qtermwidget.h>
+#include <DGuiApplicationHelper>
 
 static const char *HERDR_BINARY = "herdr";
 static const char *HERDR_CONFIG_DIR = "herdr";
@@ -71,6 +74,11 @@ void MainWindow::initUI()
 
     setCentralWidget(centralWidget);
     Dtk::Widget::moveToCenter(this);
+
+    applyTerminalColorScheme(DGuiApplicationHelper::instance()->themeType());
+    connect(DGuiApplicationHelper::instance(),
+        &DGuiApplicationHelper::themeTypeChanged, this,
+        &MainWindow::applyTerminalColorScheme);
 }
 
 void MainWindow::checkHerdrAndStart()
@@ -201,8 +209,13 @@ void MainWindow::installHerdr()
 void MainWindow::ensureServerRunning(const QString &socketPath)
 {
     if (QFileInfo::exists(socketPath)) {
-        launchClient();
-        return;
+        QLocalSocket probe;
+        probe.connectToServer(socketPath);
+        if (probe.waitForConnected(500)) {
+            launchClient();
+            return;
+        }
+        QFile::remove(socketPath);
     }
 
     if (m_launchAttempts >= 30) {
@@ -252,4 +265,15 @@ QString MainWindow::findHerdrBinary() const
         return fallback;
     }
     return {};
+}
+
+void MainWindow::applyTerminalColorScheme(DGuiApplicationHelper::ColorType themeType)
+{
+    if (!m_terminal) {
+        return;
+    }
+    QString scheme = (themeType == DGuiApplicationHelper::DarkType)
+        ? QStringLiteral("Theme7")
+        : QStringLiteral("Theme10");
+    m_terminal->setColorScheme(scheme);
 }

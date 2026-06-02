@@ -14,22 +14,22 @@ static void messageHandler(QtMsgType type, const QMessageLogContext &ctx, const 
 }
 
 int main(int argc, char *argv[]) {
-    freopen("/dev/null", "w", stdout);
-    freopen("/dev/null", "w", stderr);
-
     qInstallMessageHandler(messageHandler);
 
     DApplication app(argc, argv);
+    app.loadTranslator();
+
     app.setApplicationName("deepin-herdr");
     app.setApplicationDisplayName("deepin-herdr");
     app.setApplicationVersion("0.1.0");
     app.setOrganizationName("deepin");
     app.setProductIcon(QIcon::fromTheme("deepin-herdr"));
     app.setApplicationDescription(
-        QObject::tr("deepin-herdr is a DTK frontend for herdr terminal\n"
-                     "workspace manager.\n\n"
-                     "herdr provides a terminal-based IDE experience with\n"
-                     "multi-pane workspaces, tabs, and AI agent integration."));
+        QApplication::translate("main",
+            "deepin-herdr is a DTK frontend for herdr terminal\n"
+            "workspace manager.\n"
+            "herdr provides a terminal-based IDE experience with\n"
+            "multi-pane workspaces, tabs, and AI agent integration."));
 
     MainWindow window;
     window.show();

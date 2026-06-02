@@ -41,6 +41,7 @@ set(HEADERS
 )
 
 set(TRANSLATION_FILES
+    translations/deepin-herdr.ts
     translations/deepin-herdr_zh_CN.ts
 )
 
