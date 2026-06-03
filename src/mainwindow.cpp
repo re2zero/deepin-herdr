@@ -16,6 +16,8 @@
 #include <QNetworkReply>
 #include <QPointer>
 #include <QShortcut>
+#include <QDesktopServices>
+#include <QUrl>
 
 #include <QLocalSocket>
 
@@ -102,6 +104,12 @@ void MainWindow::initUI()
     connect(DGuiApplicationHelper::instance(),
         &DGuiApplicationHelper::themeTypeChanged, this,
         &MainWindow::applyTerminalColorScheme);
+
+    connect(m_terminal, &QTermWidget::urlActivated, this,
+        [](const QUrl &url, bool fromContextMenu) {
+            Q_UNUSED(fromContextMenu);
+            QDesktopServices::openUrl(url);
+        });
 }
 
 void MainWindow::checkHerdrAndStart()
