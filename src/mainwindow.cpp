@@ -110,6 +110,13 @@ void MainWindow::initUI()
             Q_UNUSED(fromContextMenu);
             QDesktopServices::openUrl(url);
         });
+
+    connect(m_terminal, &QTermWidget::copyAvailable, this,
+        [this](bool available) {
+            if (available) {
+                m_terminal->copyClipboard();
+            }
+        });
 }
 
 void MainWindow::checkHerdrAndStart()
