@@ -319,7 +319,9 @@ fn clipboard_commands() -> Vec<ClipboardCommand> {
     if std::env::var_os("WAYLAND_DISPLAY").is_some() {
         commands.push(ClipboardCommand {
             program: "wl-copy",
-            args: &["--type", "text/plain;charset=utf-8"],
+            // --background keeps the child alive serving clipboard data;
+            // without it the data is cleared when wl-copy exits.
+            args: &["--type", "text/plain;charset=utf-8", "--background"],
         });
     }
 
@@ -361,6 +363,15 @@ fn run_clipboard_command(command: &ClipboardCommand, bytes: &[u8]) -> bool {
         return false;
     }
     drop(stdin);
+
+    // wl-copy --background stays alive to serve clipboard requests.
+    // Detach the wait to avoid blocking the caller.
+    if command.program == "wl-copy" {
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        return true;
+    }
 
     child.wait().map(|status| status.success()).unwrap_or(false)
 }

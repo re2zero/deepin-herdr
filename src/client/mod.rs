@@ -1086,7 +1086,7 @@ fn forward_clipboard(data: &str) {
         return;
     };
 
-    crate::selection::write_osc52_bytes(&bytes);
+    let _ = crate::selection::write_osc52_bytes(&bytes);
 }
 
 // ---------------------------------------------------------------------------

@@ -319,18 +319,25 @@ fn should_prefer_osc52() -> bool {
 
 /// Write clipboard bytes to the system clipboard via OSC 52.
 ///
+/// Returns `true` if the clipboard was successfully written via the platform
+/// clipboard provider (e.g. `xclip`, `wl-copy`, `pbcopy`). Returns `false`
+/// if the platform provider was unavailable or failed — in that case the OSC
+/// 52 fallback sequence is emitted to stdout, but herdr cannot verify whether
+/// the host terminal or widget actually processed it.
+///
 /// OSC 52 format: `ESC ] 52 ; c ; <base64> BEL`
 ///
 /// Some terminals still only honor BEL-terminated OSC 52 writes, so herdr
 /// emits BEL here even though ST works in newer emulators.
-pub fn write_osc52_bytes(bytes: &[u8]) {
+pub fn write_osc52_bytes(bytes: &[u8]) -> bool {
     if !should_prefer_osc52() && crate::platform::write_clipboard(bytes) {
-        return;
+        return true;
     }
 
     let sequence = osc52_sequence(bytes);
     let _ = std::io::stdout().write_all(sequence.as_bytes());
     let _ = std::io::stdout().flush();
+    false
 }
 
 #[cfg(test)]

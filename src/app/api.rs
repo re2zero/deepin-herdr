@@ -22,10 +22,12 @@ impl App {
     pub(crate) fn handle_internal_event(&mut self, ev: AppEvent) {
         if let AppEvent::ClipboardWrite { content } = ev {
             #[cfg(not(test))]
-            crate::selection::write_osc52_bytes(&content);
+            let ok = crate::selection::write_osc52_bytes(&content);
             #[cfg(test)]
-            let _ = content;
-            self.show_clipboard_feedback();
+            let ok = { let _ = content; true };
+            if ok {
+                self.show_clipboard_feedback();
+            }
             return;
         }
 

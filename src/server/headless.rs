@@ -1308,8 +1308,8 @@ impl HeadlessServer {
                 if let Some(client_id) = self.foreground_client_id {
                     let data = base64::engine::general_purpose::STANDARD.encode(content.as_slice());
                     self.send_to_client(client_id, ServerMessage::Clipboard { data });
+                    self.app.show_clipboard_feedback();
                 }
-                self.app.show_clipboard_feedback();
                 true
             }
             AppEvent::StateChanged { pane_id, agent, .. } => {
