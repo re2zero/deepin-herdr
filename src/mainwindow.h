@@ -19,6 +19,7 @@ public:
 
 private slots:
     void applyTerminalColorScheme(DGuiApplicationHelper::ColorType themeType);
+    void handleOSC52Clipboard(char target, const QString &base64Data);
 
 private:
     void initUI();

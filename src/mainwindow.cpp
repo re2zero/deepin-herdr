@@ -20,6 +20,7 @@
 #include <QUrl>
 
 #include <QLocalSocket>
+#include <QClipboard>
 
 #include <qtermwidget.h>
 #include <DGuiApplicationHelper>
@@ -111,12 +112,23 @@ void MainWindow::initUI()
             QDesktopServices::openUrl(url);
         });
 
-    connect(m_terminal, &QTermWidget::copyAvailable, this,
-        [this](bool available) {
-            if (available) {
-                m_terminal->copyClipboard();
-            }
-        });
+    // Auto-copy on QTermWidget's native Shift+drag selection.
+    connect(m_terminal, &QTermWidget::copyAvailable,
+            m_terminal, [this](bool available) {
+        if (available) {
+            m_terminal->copyClipboard();
+        }
+    });
+
+    // Runtime-detected OSC 52 clipboard support.
+    // Newer libterminalwidget6 versions have osc52ClipboardRequest
+    // as a real signal (parsed from Vt102Emulation). Older versions
+    // do not — check at runtime via meta-object to avoid linker error.
+    if (QTermWidget::staticMetaObject.indexOfSignal(
+            "osc52ClipboardRequest(char,QString)") >= 0) {
+        connect(m_terminal, SIGNAL(osc52ClipboardRequest(char,QString)),
+                this, SLOT(handleOSC52Clipboard(char,QString)));
+    }
 }
 
 void MainWindow::checkHerdrAndStart()
@@ -314,4 +326,47 @@ void MainWindow::applyTerminalColorScheme(DGuiApplicationHelper::ColorType theme
         ? QStringLiteral("Theme7")
         : QStringLiteral("Theme10");
     m_terminal->setColorScheme(scheme);
+}
+
+void MainWindow::handleOSC52Clipboard(char target, const QString &base64Data)
+{
+    const int MAX_BASE64_SIZE = 64 * 1024 * 1024;
+    if (base64Data.size() > MAX_BASE64_SIZE) {
+        qWarning().nospace() << "OSC52: Rejected - data too large ("
+                             << base64Data.size() << " bytes, max=" << MAX_BASE64_SIZE << ")";
+        return;
+    }
+
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    QString text;
+
+    if (!base64Data.isEmpty()) {
+        QByteArray decoded = QByteArray::fromBase64(base64Data.toLatin1());
+        if (decoded.isEmpty()) {
+            qWarning() << "OSC52: Base64 decoding failed";
+            return;
+        }
+        text = QString::fromUtf8(decoded);
+        if (text.isEmpty() && !decoded.isEmpty()) {
+            qWarning() << "OSC52: Invalid UTF-8 encoding in clipboard data";
+            return;
+        }
+    }
+
+    switch (target) {
+    case 'p':
+        clipboard->setText(text, QClipboard::Selection);
+        break;
+    case 's':
+        clipboard->setText(text, QClipboard::Selection);
+        break;
+    case '0':
+        clipboard->setText(text, QClipboard::Clipboard);
+        clipboard->setText(text, QClipboard::Selection);
+        break;
+    case 'c':
+    default:
+        clipboard->setText(text, QClipboard::Clipboard);
+        break;
+    }
 }
