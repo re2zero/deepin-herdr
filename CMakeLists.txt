@@ -3,7 +3,7 @@ project(deepin-herdr LANGUAGES CXX)
 
 # Default version, overridden by debian/rules via -DAPP_VERSION
 if(NOT DEFINED APP_VERSION)
-    set(APP_VERSION "0.2.0")
+    set(APP_VERSION "0.2.1")
 endif()
 message(STATUS "   >>> Version: ${APP_VERSION}")
 

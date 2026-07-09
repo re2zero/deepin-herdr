@@ -7,7 +7,21 @@
 class QTermWidget;
 class QTimer;
 class QNetworkReply;
+class QMenu;
+class QAction;
 class QFont;
+
+// Theme name mapping
+static constexpr const char *THEME_ONE_NAME   = "Elementary";
+static constexpr const char *THEME_TWO_NAME   = "Empathy";
+static constexpr const char *THEME_THREE_NAME = "Tomorrow night blue";
+static constexpr const char *THEME_FOUR_NAME  = "Bim";
+static constexpr const char *THEME_FIVE_NAME  = "Freya";
+static constexpr const char *THEME_SIX_NAME   = "Hybrid";
+static constexpr const char *THEME_SEVEN_NAME = "Ocean dark";
+static constexpr const char *THEME_EIGHT_NAME = "Deepin";
+static constexpr const char *THEME_NINE_NAME  = "Ura";
+static constexpr const char *THEME_TEN_NAME   = "One light";
 
 DWIDGET_USE_NAMESPACE
 
@@ -18,8 +32,8 @@ public:
     ~MainWindow();
 
 private slots:
-    void applyTerminalColorScheme(DGuiApplicationHelper::ColorType themeType);
     void handleOSC52Clipboard(char target, const QString &base64Data);
+    void switchThemeAction(QAction *action);
 
 private:
     void initUI();
@@ -42,6 +56,10 @@ private:
     QTimer *m_launchTimer;
     int m_launchAttempts;
     QFont m_originalFont;
+    QMenu *m_themeMenu;
+    QAction *m_lightThemeAction;
+    QAction *m_darkThemeAction;
+    QAction *m_autoThemeAction;
 };
 
 #endif // MAINWINDOW_H

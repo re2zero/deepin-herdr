@@ -1,3 +1,12 @@
+deepin-herdr (0.2.1) unstable; urgency=medium
+
+  * Integrate extended theme menu into DTK titlebar menu.
+  * Add theme name mapping to resolve Theme1-10 to real names (Elementary, Empathy, etc.).
+  * Add theme persistence using QSettings to save and load selected theme on startup.
+  * Use DTK translation for 'Theme' menu via qApp->translate("TitleBarMenu", "Theme").
+
+ -- re2zero <yangwu@uniontech.com>  Wed, 09 Jul 2026 10:00:00 +0800
+
 deepin-herdr (0.2.0) unstable; urgency=medium
 
   * Bind terminal color scheme to theme: dark=Theme7, light=Theme10.

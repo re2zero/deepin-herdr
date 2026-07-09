@@ -18,6 +18,11 @@
 #include <QShortcut>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QMenu>
+#include <QAction>
+#include <QToolButton>
+#include <QActionGroup>
+#include <QSettings>
 
 #include <QLocalSocket>
 #include <QClipboard>
@@ -49,9 +54,112 @@ MainWindow::MainWindow(QWidget *parent)
     resize(1200, 800);
     initUI();
 
-    titlebar()->setIcon(QIcon::fromTheme("deepin-herdr"));
-    titlebar()->setSwitchThemeMenuVisible(true);
+    titlebar()->setSwitchThemeMenuVisible(false);
 
+    // Get DTK titlebar menu and add theme options
+    QMenu *dtkMenu = titlebar()->menu();
+    if (dtkMenu) {
+        // Add theme separator and options to DTK menu
+        dtkMenu->addSeparator();
+
+        m_themeMenu = new QMenu(qApp->translate("TitleBarMenu", "Theme"));
+        m_lightThemeAction = m_themeMenu->addAction(QObject::tr("Light"));
+        m_darkThemeAction = m_themeMenu->addAction(QObject::tr("Dark"));
+        m_autoThemeAction = m_themeMenu->addAction(QObject::tr("Follow System"));
+        m_themeMenu->addSeparator();
+
+        // Add built-in terminal color schemes with real names
+        QStringList schemes = QTermWidget::availableColorSchemes();
+        for (const QString &scheme : schemes) {
+            // Skip basic theme names to avoid duplication
+            if (scheme == "Light" || scheme == "Dark" || scheme == "System") {
+                continue;
+            }
+
+            // Resolve Theme1-10 to real names
+            QString displayName = scheme;
+            if (scheme == "Theme1") displayName = THEME_ONE_NAME;
+            else if (scheme == "Theme2") displayName = THEME_TWO_NAME;
+            else if (scheme == "Theme3") displayName = THEME_THREE_NAME;
+            else if (scheme == "Theme4") displayName = THEME_FOUR_NAME;
+            else if (scheme == "Theme5") displayName = THEME_FIVE_NAME;
+            else if (scheme == "Theme6") displayName = THEME_SIX_NAME;
+            else if (scheme == "Theme7") displayName = THEME_SEVEN_NAME;
+            else if (scheme == "Theme8") displayName = THEME_EIGHT_NAME;
+            else if (scheme == "Theme9") displayName = THEME_NINE_NAME;
+            else if (scheme == "Theme10") displayName = THEME_TEN_NAME;
+
+            QAction *action = m_themeMenu->addAction(displayName);
+            action->setData(scheme); // Store original scheme name
+            action->setCheckable(true);
+        }
+
+        // Set checkable for basic theme actions
+        m_lightThemeAction->setCheckable(true);
+        m_darkThemeAction->setCheckable(true);
+        m_autoThemeAction->setCheckable(true);
+
+        // Create action group
+        QActionGroup *themeGroup = new QActionGroup(m_themeMenu);
+        themeGroup->addAction(m_lightThemeAction);
+        themeGroup->addAction(m_darkThemeAction);
+        themeGroup->addAction(m_autoThemeAction);
+
+        for (QAction *action : m_themeMenu->actions()) {
+            if (action != m_lightThemeAction && action != m_darkThemeAction && action != m_autoThemeAction) {
+                themeGroup->addAction(action);
+            }
+        }
+
+        // Connect theme actions
+        connect(m_lightThemeAction, &QAction::triggered, this, [this]() {
+            switchThemeAction(m_lightThemeAction);
+        });
+        connect(m_darkThemeAction, &QAction::triggered, this, [this]() {
+            switchThemeAction(m_darkThemeAction);
+        });
+        connect(m_autoThemeAction, &QAction::triggered, this, [this]() {
+            switchThemeAction(m_autoThemeAction);
+        });
+
+        for (QAction *action : m_themeMenu->actions()) {
+            if (action != m_lightThemeAction && action != m_darkThemeAction && action != m_autoThemeAction) {
+                connect(action, &QAction::triggered, this, [this, action]() {
+                    switchThemeAction(action);
+                });
+            }
+        }
+
+        // Add theme menu to DTK menu
+        dtkMenu->addMenu(m_themeMenu);
+    }
+
+    // Load saved theme on startup
+    QSettings settings("deepin-herdr", "deepin-herdr");
+    QString savedTheme = settings.value("theme", "Auto").toString();
+
+    // Apply saved theme
+    if (savedTheme == "Light") {
+        m_lightThemeAction->trigger();
+    } else if (savedTheme == "Dark") {
+        m_darkThemeAction->trigger();
+    } else if (savedTheme == "Auto") {
+        m_autoThemeAction->trigger();
+    } else {
+        // Check if saved theme is a built-in color scheme
+        for (QAction *action : m_themeMenu->actions()) {
+            if (action != m_lightThemeAction && action != m_darkThemeAction && action != m_autoThemeAction) {
+                QString scheme = action->data().toString();
+                if (scheme.isEmpty()) {
+                    scheme = action->text();
+                }
+                if (scheme == savedTheme) {
+                    action->trigger();
+                    break;
+                }
+            }
+        }
+    }
     m_launchTimer->setSingleShot(true);
     m_launchTimer->setInterval(500);
 
@@ -101,10 +209,8 @@ void MainWindow::initUI()
     bindKey(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F),
         &QTermWidget::toggleShowSearchBar);
 
-    applyTerminalColorScheme(DGuiApplicationHelper::instance()->themeType());
-    connect(DGuiApplicationHelper::instance(),
-        &DGuiApplicationHelper::themeTypeChanged, this,
-        &MainWindow::applyTerminalColorScheme);
+    // Initialize with default color scheme
+    m_terminal->setColorScheme(QStringLiteral("Theme7"));
 
     connect(m_terminal, &QTermWidget::urlActivated, this,
         [](const QUrl &url, bool fromContextMenu) {
@@ -317,17 +423,6 @@ QString MainWindow::findHerdrBinary() const
     return {};
 }
 
-void MainWindow::applyTerminalColorScheme(DGuiApplicationHelper::ColorType themeType)
-{
-    if (!m_terminal) {
-        return;
-    }
-    QString scheme = (themeType == DGuiApplicationHelper::DarkType)
-        ? QStringLiteral("Theme7")
-        : QStringLiteral("Theme10");
-    m_terminal->setColorScheme(scheme);
-}
-
 void MainWindow::handleOSC52Clipboard(char target, const QString &base64Data)
 {
     const int MAX_BASE64_SIZE = 64 * 1024 * 1024;
@@ -368,5 +463,57 @@ void MainWindow::handleOSC52Clipboard(char target, const QString &base64Data)
     default:
         clipboard->setText(text, QClipboard::Clipboard);
         break;
+    }
+}
+
+void MainWindow::switchThemeAction(QAction *action)
+{
+    QString themeKey = "theme";
+    QSettings settings("deepin-herdr", "deepin-herdr");
+
+    if (action == m_lightThemeAction) {
+        // Light theme: terminal follows light theme
+        m_terminal->setColorScheme(QStringLiteral("Theme10"));
+        settings.setValue(themeKey, "Light");
+        for (QAction *a : m_themeMenu->actions()) {
+            a->setChecked(a == m_lightThemeAction);
+        }
+        return;
+    }
+
+    if (action == m_darkThemeAction) {
+        // Dark theme: terminal follows dark theme
+        m_terminal->setColorScheme(QStringLiteral("Theme7"));
+        settings.setValue(themeKey, "Dark");
+        for (QAction *a : m_themeMenu->actions()) {
+            a->setChecked(a == m_darkThemeAction);
+        }
+        return;
+    }
+
+    if (action == m_autoThemeAction) {
+        // Follow system: terminal follows system theme
+        DGuiApplicationHelper::ColorType themeType = DGuiApplicationHelper::instance()->themeType();
+        if (themeType == DGuiApplicationHelper::DarkType) {
+            m_terminal->setColorScheme(QStringLiteral("Theme7"));
+        } else {
+            m_terminal->setColorScheme(QStringLiteral("Theme10"));
+        }
+        settings.setValue(themeKey, "Auto");
+        for (QAction *a : m_themeMenu->actions()) {
+            a->setChecked(a == m_autoThemeAction);
+        }
+        return;
+    }
+
+    // Extended theme: built-in terminal color scheme
+    QString scheme = action->data().toString();
+    if (scheme.isEmpty()) {
+        scheme = action->text();
+    }
+    m_terminal->setColorScheme(scheme);
+    settings.setValue(themeKey, scheme);
+    for (QAction *a : m_themeMenu->actions()) {
+        a->setChecked(a == action);
     }
 }
