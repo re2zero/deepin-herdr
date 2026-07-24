@@ -10,6 +10,7 @@ class QNetworkReply;
 class QMenu;
 class QAction;
 class QFont;
+class SettingsDialog;
 
 // Theme name mapping
 static constexpr const char *THEME_ONE_NAME   = "Elementary";
@@ -34,6 +35,8 @@ public:
 private slots:
     void handleOSC52Clipboard(char target, const QString &base64Data);
     void switchThemeAction(QAction *action);
+    void openSettings();
+    void onSettingsChanged(const QString &fontFamily, int fontSize, int cursorShape);
 
 private:
     void initUI();
@@ -42,6 +45,7 @@ private:
     void launchClient();
     QString findHerdrBinary() const;
     void installHerdr();
+    void restoreTerminalSettings();
 
     struct HerdrRelease {
         QString version;
@@ -60,6 +64,7 @@ private:
     QAction *m_lightThemeAction;
     QAction *m_darkThemeAction;
     QAction *m_autoThemeAction;
+    int m_cursorShape;
 };
 
 #endif // MAINWINDOW_H

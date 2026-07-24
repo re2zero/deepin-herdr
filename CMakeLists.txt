@@ -48,10 +48,12 @@ pkg_check_modules(ICU REQUIRED icu-i18n icu-uc IMPORTED_TARGET)
 set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
+    src/settingsdialog.cpp
 )
 
 set(HEADERS
     src/mainwindow.h
+    src/settingsdialog.h
 )
 
 set(TRANSLATION_FILES

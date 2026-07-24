@@ -31,6 +31,49 @@ Please install herdr manually to ~/.local/bin/herdr</translation>
         <source>OK</source>
         <translation>OK</translation>
     </message>
+    <message>
+        <source>Settings</source>
+        <translation>Settings</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsDialog</name>
+    <message>
+        <source>Settings</source>
+        <translation>Settings</translation>
+    </message>
+    <message>
+        <source>Font</source>
+        <translation>Font</translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation>Size</translation>
+    </message>
+    <message>
+        <source>Cursor Shape</source>
+        <translation>Cursor Shape</translation>
+    </message>
+    <message>
+        <source>Block</source>
+        <translation>Block</translation>
+    </message>
+    <message>
+        <source>Underline</source>
+        <translation>Underline</translation>
+    </message>
+    <message>
+        <source>IBeam</source>
+        <translation>IBeam</translation>
+    </message>
+    <message>
+        <source>This font is not monospaced; terminal alignment may be affected.</source>
+        <translation>This font is not monospaced; terminal alignment may be affected.</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
 </context>
 <context>
     <name>main</name>

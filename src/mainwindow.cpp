@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "settingsdialog.h"
 
 #include <DWidgetUtil>
 #include <DTitlebar>
@@ -50,6 +51,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_terminal(nullptr)
     , m_launchTimer(new QTimer(this))
     , m_launchAttempts(0)
+    , m_cursorShape(0)
 {
     resize(1200, 800);
     initUI();
@@ -132,6 +134,10 @@ MainWindow::MainWindow(QWidget *parent)
 
         // Add theme menu to DTK menu
         dtkMenu->addMenu(m_themeMenu);
+
+        // Settings entry (same level as Theme)
+        QAction *settingsAction = dtkMenu->addAction(QObject::tr("Settings"));
+        connect(settingsAction, &QAction::triggered, this, &MainWindow::openSettings);
     }
 
     // Load saved theme on startup
@@ -160,6 +166,10 @@ MainWindow::MainWindow(QWidget *parent)
             }
         }
     }
+
+    // Restore terminal font/size/cursor from persisted settings
+    restoreTerminalSettings();
+
     m_launchTimer->setSingleShot(true);
     m_launchTimer->setInterval(500);
 
@@ -516,4 +526,60 @@ void MainWindow::switchThemeAction(QAction *action)
     for (QAction *a : m_themeMenu->actions()) {
         a->setChecked(a == action);
     }
+}
+
+void MainWindow::restoreTerminalSettings()
+{
+    QSettings settings("deepin-herdr", "deepin-herdr");
+
+    // Restore font family
+    QString fontFamily = settings.value("fontFamily").toString();
+    if (!fontFamily.isEmpty()) {
+        QFont font = m_terminal->getTerminalFont();
+        font.setFamily(fontFamily);
+        m_terminal->setTerminalFont(font);
+    }
+
+    // Restore font size
+    if (settings.contains("fontSize")) {
+        int fontSize = settings.value("fontSize").toInt();
+        QFont font = m_terminal->getTerminalFont();
+        font.setPointSize(fontSize);
+        m_terminal->setTerminalFont(font);
+    }
+
+    // Restore cursor shape (D-1)
+    if (settings.contains("cursorShape")) {
+        m_cursorShape = settings.value("cursorShape").toInt();
+        if (m_cursorShape < 0 || m_cursorShape > 2) {
+            m_cursorShape = 0;
+        }
+        m_terminal->setKeyboardCursorShape(
+            static_cast<QTermWidget::KeyboardCursorShape>(m_cursorShape));
+    }
+
+    // m_originalFont serves as the Ctrl+0 baseline — now reflects persisted size/family
+    m_originalFont = m_terminal->getTerminalFont();
+}
+
+void MainWindow::openSettings()
+{
+    auto *dlg = new SettingsDialog(m_terminal, m_cursorShape, this);
+    connect(dlg, &SettingsDialog::settingsChanged,
+            this, &MainWindow::onSettingsChanged);
+    connect(dlg, &DDialog::closed, dlg, &QObject::deleteLater);
+    dlg->show();
+}
+
+void MainWindow::onSettingsChanged(const QString &fontFamily, int fontSize, int cursorShape)
+{
+    QSettings settings("deepin-herdr", "deepin-herdr");
+    settings.setValue("fontFamily", fontFamily);
+    settings.setValue("fontSize", fontSize);
+    settings.setValue("cursorShape", cursorShape);
+
+    m_cursorShape = cursorShape;
+
+    // Update Ctrl+0 baseline to the persisted font state
+    m_originalFont = m_terminal->getTerminalFont();
 }
