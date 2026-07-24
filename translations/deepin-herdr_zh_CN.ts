@@ -31,6 +31,49 @@ Please install herdr manually to ~/.local/bin/herdr</source>
         <source>OK</source>
         <translation>确定</translation>
     </message>
+    <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsDialog</name>
+    <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>Font</source>
+        <translation>字体</translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation>大小</translation>
+    </message>
+    <message>
+        <source>Cursor Shape</source>
+        <translation>光标形状</translation>
+    </message>
+    <message>
+        <source>Block</source>
+        <translation>方块</translation>
+    </message>
+    <message>
+        <source>Underline</source>
+        <translation>下划线</translation>
+    </message>
+    <message>
+        <source>IBeam</source>
+        <translation>竖线</translation>
+    </message>
+    <message>
+        <source>This font is not monospaced; terminal alignment may be affected.</source>
+        <translation>该字体非等宽字体，终端对齐可能受到影响。</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>确定</translation>
+    </message>
 </context>
 <context>
     <name>main</name>
