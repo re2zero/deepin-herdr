@@ -1,0 +1,28 @@
+name: Windows (experimental)
+
+# The vendored terminalwidget's kpty is POSIX-only; the Windows port
+# needs a ConPTY backend (roadmap M4). This job exists to surface what
+# still breaks — it is allowed to fail and only runs on demand.
+on:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    name: windows-x86_64 (expected to fail until M4)
+    runs-on: windows-2022
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v2
+        with:
+          version: '6.7.*'
+          arch: 'win64_msvc2019_64'
+          modules: 'qt.core5compat'
+
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DDISABLE_DTK=ON -DUSE_SYSTEM_TERMINALWIDGET=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel

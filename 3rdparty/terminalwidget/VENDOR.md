@@ -29,12 +29,17 @@ builds and were taken from the same upstream version.
    Static by default (`TERMINALWIDGET_STATIC_BUILD=OFF` for shared),
    no lib-translation handling, installs color schemes and keyboard
    layouts into `<prefix>/share/terminalwidget<QtMajor>/`.
-2. `lib/tools.cpp` — relocatable data-dir fallback (searched only when
+2. `lib/encodes/detectcode.cpp` — libchardet is optional
+   (`TERMINALWIDGET_HAVE_CHARDET`, enabled when pkg-config finds
+   `chardet` and `TERMINALWIDGET_DISABLE_CHARDET=OFF`): without it the
+   uchardet path drives encoding detection, which makes macOS/homebrew
+   builds possible.
+3. `lib/tools.cpp` — relocatable data-dir fallback (searched only when
    the compile-time `KB_LAYOUT_DIR` / `COLORSCHEMES_DIR` does not exist):
    `<appdir>/../share/terminalwidget<QtMajor>/{kb-layouts,color-schemes}`.
    This is what makes AppImage / Windows portable trees work; it is a
    no-op for a regular `/usr` install.
-3. `qtermwidget_export.h` (kept one level up, next to this file) — the
+4. `qtermwidget_export.h` (kept one level up, next to this file) — the
    CMake-generated export header, committed for builds that link the
    **system** library. The vendored build generates its own into the
    build directory.

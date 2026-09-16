@@ -72,6 +72,13 @@ pkg_check_modules(ICU REQUIRED icu-i18n icu-uc IMPORTED_TARGET)
 set(USE_SYSTEM_TERMINALWIDGET_DEFAULT ON)
 if(WIN32 OR APPLE)
     set(USE_SYSTEM_TERMINALWIDGET_DEFAULT OFF)
+else()
+    # only deepin provides the system library; generic distros build the
+    # vendored copy
+    find_library(TERMINALWIDGET_SYSTEM_LIB terminalwidget${QT_VERSION_MAJOR})
+    if(NOT TERMINALWIDGET_SYSTEM_LIB)
+        set(USE_SYSTEM_TERMINALWIDGET_DEFAULT OFF)
+    endif()
 endif()
 option(USE_SYSTEM_TERMINALWIDGET
     "Link the system terminalwidget instead of the vendored one"

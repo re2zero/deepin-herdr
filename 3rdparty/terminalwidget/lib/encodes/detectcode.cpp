@@ -11,7 +11,9 @@
 #include <QDateTime>
 #include <QTextCodec>
 #include <exception>
+#ifdef TERMINALWIDGET_HAVE_CHARDET
 #include <chardet/chardet.h>
+#endif
 
 #if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
 #include <QRegExp>
@@ -118,6 +120,7 @@ QByteArray DetectCode::GetFileEncodingFormat(QString filepath, QByteArray conten
     QByteArray detectRet;
     float chardetconfidence = 0.0f;
 
+#ifdef TERMINALWIDGET_HAVE_CHARDET
     /* chardet识别编码 */
     QString str(content);
     // 匹配的是中文(仅在UTF-8编码下)
@@ -152,6 +155,8 @@ QByteArray DetectCode::GetFileEncodingFormat(QString filepath, QByteArray conten
             DetectCode::ChartDet_DetectingTextCoding(newContent, charDetectedResult, chardetconfidence);
         }
     }
+#endif
+    // VENDOR: without libchardet the uchardet branch below drives detection
     ucharDetectdRet = charDetectedResult.toLatin1();
 
     // uchardet识别编码 若识别率过低, 考虑是否非单字节编码格式。
@@ -428,6 +433,7 @@ QByteArray DetectCode::EncaDetectCode(QString filepath)
 }
 #endif
 
+#ifdef TERMINALWIDGET_HAVE_CHARDET
 /**
  * @brief ChartDet_DetectingTextCoding libchardet1编码识别库识别编码
  */
@@ -494,6 +500,7 @@ int DetectCode::ChartDet_DetectingTextCoding(const char *str, QString &encoding,
 
     return CHARDET_SUCCESS;
 }
+#endif
 
 /**
  * @return 根据 UTF-8 字符编码，返回传入的字符串 \a buf 头部字符可能占用的字节数量

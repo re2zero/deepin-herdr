@@ -31,9 +31,18 @@ set(TW_RELOCATABLE_DATADIR "../share/${TERMINALWIDGET_LIBRARY_NAME}")
 option(TERMINALWIDGET_STATIC_BUILD "Build the vendored terminalwidget as a static library" ON)
 
 find_package(PkgConfig REQUIRED)
-# detectcode.cpp uses both encoding detectors (chardet API + uchardet API)
-pkg_check_modules(CHARTDET REQUIRED chardet IMPORTED_TARGET)
+# Encoding detection: uchardet is required; libchardet is optional
+# (VENDOR: without it detectcode.cpp falls back to uchardet-only via
+# TERMINALWIDGET_HAVE_CHARDET). macOS/homebrew ships no chardet formula.
+option(TERMINALWIDGET_DISABLE_CHARDET "Skip libchardet even if found" OFF)
+pkg_check_modules(CHARTDET chardet IMPORTED_TARGET)
 pkg_check_modules(UCHARDET REQUIRED uchardet IMPORTED_TARGET)
+set(TW_CHARDET_DEFINES "")
+set(TW_CHARDET_LIBS "")
+if(CHARTDET_FOUND AND NOT TERMINALWIDGET_DISABLE_CHARDET)
+    list(APPEND TW_CHARDET_DEFINES TERMINALWIDGET_HAVE_CHARDET)
+    list(APPEND TW_CHARDET_LIBS PkgConfig::CHARTDET)
+endif()
 
 check_function_exists(updwtmpx HAVE_UPDWTMPX)
 
@@ -127,8 +136,8 @@ target_link_libraries(${TERMINALWIDGET_LIBRARY_NAME}
         Qt${QT_VERSION_MAJOR}::Widgets
         ${TW_EXTRA_LIBS}
         PkgConfig::ICU
-        PkgConfig::CHARTDET
         PkgConfig::UCHARDET
+        ${TW_CHARDET_LIBS}
 )
 if(UNIX)
     target_link_libraries(${TERMINALWIDGET_LIBRARY_NAME} PRIVATE m)
@@ -140,6 +149,7 @@ target_compile_definitions(${TERMINALWIDGET_LIBRARY_NAME}
         "COLORSCHEMES_DIR=\"${TW_INSTALL_DATADIR}/color-schemes\""
         "TRANSLATIONS_DIR=\"${TW_INSTALL_DATADIR}/translations\""
         "TERMWIDGET_RELOCATABLE_DATADIR=\"${TW_RELOCATABLE_DATADIR}\""
+        ${TW_CHARDET_DEFINES}
         "HAVE_POSIX_OPENPT"
         "HAVE_SYS_TIME_H"
         $<$<BOOL:${HAVE_UPDWTMPX}>:HAVE_UPDWTMPX>
