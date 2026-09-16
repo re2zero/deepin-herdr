@@ -15,7 +15,10 @@ class UpdateBanner : public QWidget {
 public:
     explicit UpdateBanner(QWidget *parent = nullptr);
 
+    // update semantics: action + skip-this-version + close
     void showUpdate(const QString &message, const QString &actionText);
+    // lifecycle notices: optional action + close, never a skip button
+    void showNotice(const QString &message, const QString &actionText = QString());
     void showProgress(int percent);
     void showDone(const QString &message);
     void showError(const QString &message);
@@ -29,6 +32,8 @@ protected:
     void changeEvent(QEvent *event) override;
 
 private:
+    void present(const QString &message, const QString &actionText, bool showSkip);
+
     QLabel *m_icon;
     QLabel *m_message;
     QLabel *m_status;

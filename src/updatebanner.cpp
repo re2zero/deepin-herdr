@@ -84,18 +84,28 @@ void UpdateBanner::changeEvent(QEvent *event)
     QWidget::changeEvent(event);
 }
 
-void UpdateBanner::showUpdate(const QString &message, const QString &actionText)
+void UpdateBanner::present(const QString &message, const QString &actionText, bool showSkip)
 {
     m_actionDismisses = false;
     m_message->setText(message);
     m_actionButton->setText(actionText);
-    m_actionButton->setVisible(true);
-    m_skipButton->setVisible(true);
+    m_actionButton->setVisible(!actionText.isEmpty());
+    m_skipButton->setVisible(showSkip);
     m_progress->setVisible(false);
     m_status->setVisible(false);
     m_closeButton->setVisible(true);
     show();
     raise();
+}
+
+void UpdateBanner::showUpdate(const QString &message, const QString &actionText)
+{
+    present(message, actionText, true);
+}
+
+void UpdateBanner::showNotice(const QString &message, const QString &actionText)
+{
+    present(message, actionText, false);
 }
 
 void UpdateBanner::showProgress(int percent)

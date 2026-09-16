@@ -77,6 +77,8 @@ private:
     void checkHerdrAndStart();
     void runFirstRunInstall();
     void ensureServerRunning(const QString &socketPath);
+    void startFallbackShell();
+    void startServerWatch();
     void launchClient();
     QString findHerdrBinary() const;
     void detectHerdrVersion();
@@ -84,6 +86,8 @@ private:
     void autoCheckUpdates();
     void queueBanner(int kind, const QString &title, const QString &actionText,
                      const ReleaseUpdater::Release &release);
+    void replaceServerBanner(int kind, const QString &title,
+                             const QString &actionText = QString());
     void showNextBanner();
     void applyThemeByKey(const QString &key);
     void restoreTerminalSettings();
@@ -98,7 +102,10 @@ private:
     QWidget *m_container = nullptr;
     QTermWidget *m_terminal = nullptr;
     QTimer *m_launchTimer;
+    QTimer *m_serverWatchTimer = nullptr;
     int m_launchAttempts;
+    bool m_staleSocketRemoved = false;
+    bool m_fallbackShellStarted = false;
     QFont m_originalFont;
     QMenu *m_themeMenu = nullptr;
     QAction *m_lightThemeAction = nullptr;

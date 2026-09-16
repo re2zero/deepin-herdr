@@ -5,6 +5,7 @@
 #include "platform.h"
 #include "version.h"
 
+#include <algorithm>
 #include <QClipboard>
 #include <QDBusConnection>
 #include <QDBusInterface>
@@ -48,7 +49,23 @@ static const char *APP_ASSET_PREFIX = "deepin-herdr";
 namespace {
 constexpr int BANNER_HERDR = 0;
 constexpr int BANNER_APP = 1;
+constexpr int BANNER_CONNECTING_SERVER = 2;
+constexpr int BANNER_CONNECT_SERVER = 3;
+constexpr int BANNER_RETRY_SERVER = 4;
 constexpr int AUTO_CHECK_DELAY_MS = 4000;
+// server restore can restart every pane's agent process; 13 workspaces
+// easily take over a minute, so the launch window is generous
+constexpr int LAUNCH_MAX_ATTEMPTS = 120;      // x 500ms = 60s
+constexpr int SERVER_WATCH_INTERVAL_MS = 2000;
+const char *CLIENT_SOCKET_NAME = "herdr-client.sock";
+
+QString serverSocketPath()
+{
+    // GenericConfigLocation honours XDG_CONFIG_HOME (matches herdr's own
+    // ~/.config/herdr layout)
+    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+        + "/herdr/" + CLIENT_SOCKET_NAME;
+}
 }
 
 AppCore::AppCore(QObject *parent)
@@ -68,6 +85,14 @@ void AppCore::setTranslucencyHandler(std::function<void(bool)> handler)
 
 void AppCore::init()
 {
+    // Launch retry loop. The 500ms single-shot timer re-probes the server
+    // socket until the (re)started server finishes restoring workspaces.
+    m_launchTimer->setSingleShot(true);
+    m_launchTimer->setInterval(500);
+    connect(m_launchTimer, &QTimer::timeout, this, [this]() {
+        ensureServerRunning(serverSocketPath());
+    });
+
     initContent();
     initThemeMenu();
     restoreTerminalSettings();
@@ -285,6 +310,17 @@ void AppCore::initUpdateSystem()
         if (m_currentBanner.kind == BANNER_HERDR) {
             m_banner->showProgress(0);
             m_herdrUpdater->downloadAndInstall(m_currentBanner.release);
+        } else if (m_currentBanner.kind == BANNER_CONNECT_SERVER) {
+            // run the client inside the fallback shell's session
+            m_terminal->sendText(QStringLiteral("herdr client\n"));
+            m_serverWatchTimer->stop();
+            m_banner->hide();
+            showNextBanner();
+        } else if (m_currentBanner.kind == BANNER_RETRY_SERVER) {
+            m_banner->hide();
+            m_launchAttempts = 0;
+            m_staleSocketRemoved = false;
+            checkHerdrAndStart();
         } else {
             QDesktopServices::openUrl(QUrl(m_appUpdater->releasesPageUrl()));
             m_banner->hide();
@@ -360,6 +396,24 @@ void AppCore::queueBanner(int kind, const QString &title, const QString &actionT
     }
 }
 
+// Server lifecycle notices replace each other in place instead of
+// queueing behind update banners.
+void AppCore::replaceServerBanner(int kind, const QString &title, const QString &actionText)
+{
+    m_bannerQueue.erase(std::remove_if(m_bannerQueue.begin(), m_bannerQueue.end(),
+                            [](const BannerRequest &r) {
+                                return r.kind == BANNER_CONNECTING_SERVER
+                                    || r.kind == BANNER_CONNECT_SERVER
+                                    || r.kind == BANNER_RETRY_SERVER;
+                            }),
+                        m_bannerQueue.end());
+    m_currentBanner.kind = kind;
+    m_currentBanner.title = title;
+    m_currentBanner.actionText = actionText;
+    m_currentBanner.release = {};
+    m_banner->showNotice(title, actionText);
+}
+
 void AppCore::showNextBanner()
 {
     if (m_bannerQueue.isEmpty()) {
@@ -378,9 +432,7 @@ void AppCore::checkHerdrAndStart()
     if (!findHerdrBinary().isEmpty()) {
         detectHerdrVersion();
         startAgentMonitor();
-        QString socketPath = QDir::homePath() + "/.config/" + HERDR_CONFIG_DIR
-            + "/herdr-client.sock";
-        ensureServerRunning(socketPath);
+        ensureServerRunning(serverSocketPath());
         return;
     }
 
@@ -531,13 +583,29 @@ void AppCore::ensureServerRunning(const QString &socketPath)
         QLocalSocket probe;
         probe.connectToServer(socketPath);
         if (probe.waitForConnected(500)) {
-            launchClient();
+            m_launchTimer->stop();
+            if (m_fallbackShellStarted) {
+                // the server came up while the user was in the fallback shell
+                m_serverWatchTimer->stop();
+                replaceServerBanner(BANNER_CONNECT_SERVER, tr("herdr server is ready."),
+                                    tr("Connect"));
+            } else {
+                launchClient();
+            }
             return;
         }
-        QFile::remove(socketPath);
+        // a stale socket from a killed server blocks clients; remove once
+        if (!m_staleSocketRemoved) {
+            QFile::remove(socketPath);
+            m_staleSocketRemoved = true;
+        }
     }
 
-    if (m_launchAttempts >= 30) {
+    if (m_launchAttempts >= LAUNCH_MAX_ATTEMPTS) {
+        m_launchTimer->stop();
+        if (!m_fallbackShellStarted) {
+            startFallbackShell();
+        }
         return;
     }
 
@@ -547,15 +615,49 @@ void AppCore::ensureServerRunning(const QString &socketPath)
             return;
         }
         QProcess::startDetached(binary, {"server"});
+        replaceServerBanner(BANNER_CONNECTING_SERVER, tr("Connecting to herdr server…"));
     }
 
     m_launchAttempts++;
     m_launchTimer->start();
 }
 
+// The server never came up within the launch window: give the user a
+// working shell instead of a dead screen, keep probing in the
+// background, and offer a one-click connect once the server appears.
+void AppCore::startFallbackShell()
+{
+    m_fallbackShellStarted = true;
+    m_terminal->startTerminalTeletype();
+    replaceServerBanner(BANNER_RETRY_SERVER,
+                        tr("herdr server did not come up — a plain shell is available."),
+                        tr("Retry"));
+    startServerWatch();
+}
+
+void AppCore::startServerWatch()
+{
+    if (!m_serverWatchTimer) {
+        m_serverWatchTimer = new QTimer(this);
+        m_serverWatchTimer->setInterval(SERVER_WATCH_INTERVAL_MS);
+        connect(m_serverWatchTimer, &QTimer::timeout, this, [this]() {
+            QLocalSocket probe;
+            probe.connectToServer(serverSocketPath());
+            if (probe.waitForConnected(500)) {
+                m_serverWatchTimer->stop();
+                queueBanner(BANNER_CONNECT_SERVER, tr("herdr server is ready."),
+                            tr("Connect"), {});
+            }
+        });
+    }
+    m_serverWatchTimer->start();
+}
+
 void AppCore::launchClient()
 {
     m_launchTimer->stop();
+    m_banner->hide();
+    showNextBanner();
 
     qunsetenv("HERDR_ENV");
     qunsetenv("HERDR_PANE_ID");
