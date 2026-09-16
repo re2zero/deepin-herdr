@@ -122,7 +122,7 @@ void showContentDialog(QWidget *content, const QString &title, QWidget *parent,
 #if HAVE_DTK
     if (useDtk()) {
         auto *dlg = new DDialog(parent);
-        dlg->setTitle(title);
+        // no DDialog heading: content pages carry their own titles
         dlg->addContent(content); // dialog takes ownership
         dlg->addButton(QObject::tr("OK"));
         dlg->setCloseButtonVisible(true);

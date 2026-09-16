@@ -45,9 +45,6 @@ signals:
     void transparencyChanged(qreal opacity); // 0.3 ~ 1.0
     void autoCopyChanged(bool enabled);
 
-protected:
-    bool eventFilter(QObject *watched, QEvent *event) override;
-
 private:
     QWidget *createTerminalPage();
     QWidget *createAppearancePage();

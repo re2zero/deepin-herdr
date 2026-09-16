@@ -81,8 +81,6 @@ QFrame *makeSeparator()
     return line;
 }
 
-QWidget *makeHeightForWidth(QWidget *row);
-
 // DTK-style setting row: label on the left, control pinned to the
 // right, hairline separators drawn between rows (see RowList).
 QWidget *makeRow(const QString &label, QWidget *control)
@@ -98,7 +96,7 @@ QWidget *makeRow(const QString &label, QWidget *control)
     if (control) {
         h->addWidget(control);
     }
-    return makeHeightForWidth(row);
+    return row;
 }
 
 // Full-width row (checkbox lines, buttons, wrapped status text).
@@ -108,18 +106,6 @@ QWidget *makeFullRow(QWidget *content)
     auto *h = new QHBoxLayout(row);
     h->setContentsMargins(16, 10, 16, 10);
     h->addWidget(content, 1);
-    return makeHeightForWidth(row);
-}
-
-// A plain QWidget with a layout does not propagate its children's
-// heightForWidth to the parent layout unless the flag is set — without
-// it, word-wrapped status text gets clipped to a single-line row.
-QWidget *makeHeightForWidth(QWidget *row)
-{
-    QSizePolicy policy = row->sizePolicy();
-    policy.setHeightForWidth(true);
-    policy.setVerticalPolicy(QSizePolicy::Minimum);
-    row->setSizePolicy(policy);
     return row;
 }
 
@@ -145,11 +131,14 @@ private:
     bool m_first = true;
 };
 
+// Exactly two wrapped lines with a fixed height: long check results
+// wrap instead of stretching the dialog (user-facing decision).
 QLabel *makeStatusLabel()
 {
     auto *label = new QLabel;
-    label->setWordWrap(true); // also enables heightForWidth so rows grow
-    label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    label->setWordWrap(true);
+    label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    label->setFixedHeight(label->fontMetrics().lineSpacing() * 2 + 2);
     return label;
 }
 
@@ -394,7 +383,6 @@ QWidget *SettingsDialog::createHerdrPage()
     // Update check
     m_herdrStatus = makeStatusLabel();
     m_herdrStatus->setObjectName(QStringLiteral("herdrStatusLabel"));
-    m_herdrStatus->installEventFilter(this);
     m_herdrCheckButton = new QPushButton(QObject::tr("Check for updates"), page);
     m_herdrUpdateButton = new QPushButton(page);
     m_herdrUpdateButton->setVisible(false);
@@ -514,7 +502,6 @@ QWidget *SettingsDialog::createAboutPage()
 
     m_appStatus = makeStatusLabel();
     m_appStatus->setObjectName(QStringLiteral("appStatusLabel"));
-    m_appStatus->installEventFilter(this);
     auto *checkBtn = new QPushButton(QObject::tr("Check for updates"), page);
     m_releasesButton = new QPushButton(QObject::tr("Open releases page"), page);
     auto *buttons = new QWidget(page);
@@ -560,22 +547,6 @@ QWidget *SettingsDialog::createAboutPage()
 
     v->addStretch();
     return page;
-}
-
-// Word-wrapped status labels reflow after setText(); the host dialog was
-// sized for the empty state, so grow it back to fit (converges: a
-// no-op adjustSize produces no further resize events).
-bool SettingsDialog::eventFilter(QObject *watched, QEvent *event)
-{
-    if (event->type() == QEvent::Resize && watched == m_herdrStatus
-            || event->type() == QEvent::Resize && watched == m_appStatus) {
-        QWidget *host = window();
-        if (host && host != this) {
-            host->adjustSize();
-        }
-        adjustSize();
-    }
-    return QWidget::eventFilter(watched, event);
 }
 
 void SettingsDialog::persist()
