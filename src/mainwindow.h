@@ -4,13 +4,18 @@
 #include <DMainWindow>
 #include <DGuiApplicationHelper>
 
+#include <QVector>
+
+#include "updater.h"
+// full definition needed: slot signatures use SettingsDialog::TerminalSettings
+#include "settingsdialog.h"
+
 class QTermWidget;
 class QTimer;
-class QNetworkReply;
 class QMenu;
 class QAction;
 class QFont;
-class SettingsDialog;
+class UpdateBanner;
 
 // Theme name mapping
 static constexpr const char *THEME_ONE_NAME   = "Elementary";
@@ -32,29 +37,41 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    ReleaseUpdater *herdrUpdater() const { return m_herdrUpdater; }
+    ReleaseUpdater *appUpdater() const { return m_appUpdater; }
+    QString herdrVersion() const { return m_herdrVersion; }
+
 private slots:
     void handleOSC52Clipboard(char target, const QString &base64Data);
     void switchThemeAction(QAction *action);
     void openSettings();
-    void onSettingsChanged(const QString &fontFamily, int fontSize, int cursorShape);
+    void onSettingsChanged(const SettingsDialog::TerminalSettings &settings);
+    void onThemeSelected(const QString &key);
+    void onTransparencyChanged(qreal opacity);
+    void onAutoCopyChanged(bool enabled);
 
 private:
     void initUI();
+    void initUpdateSystem();
     void checkHerdrAndStart();
+    void runFirstRunInstall();
     void ensureServerRunning(const QString &socketPath);
     void launchClient();
     QString findHerdrBinary() const;
-    void installHerdr();
+    void detectHerdrVersion();
+    void autoCheckUpdates();
+    void queueBanner(int kind, const QString &title, const QString &actionText,
+                     const ReleaseUpdater::Release &release);
+    void showNextBanner();
+    void applyThemeByKey(const QString &key);
     void restoreTerminalSettings();
 
-    struct HerdrRelease {
-        QString version;
-        QString url;
-        QString sha256;
+    struct BannerRequest {
+        int kind = 0; // 0 = herdr update, 1 = app update
+        QString title;
+        QString actionText;
+        ReleaseUpdater::Release release;
     };
-
-    HerdrRelease selectRelease() const;
-    void downloadAndInstall(const HerdrRelease &release);
 
     QTermWidget *m_terminal;
     QTimer *m_launchTimer;
@@ -65,6 +82,14 @@ private:
     QAction *m_darkThemeAction;
     QAction *m_autoThemeAction;
     int m_cursorShape;
+    bool m_autoCopyOnSelect = true;
+
+    ReleaseUpdater *m_herdrUpdater = nullptr;
+    ReleaseUpdater *m_appUpdater = nullptr;
+    UpdateBanner *m_banner = nullptr;
+    QString m_herdrVersion;
+    QVector<BannerRequest> m_bannerQueue;
+    BannerRequest m_currentBanner;
 };
 
 #endif // MAINWINDOW_H

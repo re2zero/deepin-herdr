@@ -23,8 +23,14 @@ if(DEFINED QT_DIR)
     list(APPEND CMAKE_PREFIX_PATH "${QT_DIR}")
 endif()
 
-# Auto-detect Qt version, prefer Qt6 over Qt5
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
+# Prefer Qt6 explicitly: the generic "NAMES Qt6 Qt5" scan can settle on
+# Qt5 on distros where both stacks are installed (deepin ships both).
+find_package(Qt6 COMPONENTS Core QUIET)
+if(Qt6_FOUND)
+    set(QT_VERSION_MAJOR 6)
+else()
+    find_package(QT NAMES Qt5 REQUIRED COMPONENTS Core)
+endif()
 message(STATUS "   >>> Found Qt version: ${QT_VERSION_MAJOR}")
 
 if(NOT DEFINED ENV{QT_SELECT})
@@ -45,15 +51,35 @@ find_package(Dtk${DTK_VERSION_MAJOR} COMPONENTS Core Widget REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ICU REQUIRED icu-i18n icu-uc IMPORTED_TARGET)
 
+# terminalwidget: link the system library (provided by deepin-terminal) on
+# deepin, or build the vendored copy under 3rdparty/terminalwidget. Bundled
+# builds for other platforms must use the vendored copy — there is no
+# system terminalwidget on Windows/macOS.
+set(USE_SYSTEM_TERMINALWIDGET_DEFAULT ON)
+if(WIN32 OR APPLE)
+    set(USE_SYSTEM_TERMINALWIDGET_DEFAULT OFF)
+endif()
+option(USE_SYSTEM_TERMINALWIDGET
+    "Link the system terminalwidget instead of the vendored one"
+    ${USE_SYSTEM_TERMINALWIDGET_DEFAULT})
+message(STATUS "   >>> terminalwidget source: system=${USE_SYSTEM_TERMINALWIDGET}")
+if(NOT USE_SYSTEM_TERMINALWIDGET)
+    add_subdirectory(3rdparty/terminalwidget)
+endif()
+
 set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
     src/settingsdialog.cpp
+    src/updatebanner.cpp
+    src/updater.cpp
 )
 
 set(HEADERS
     src/mainwindow.h
     src/settingsdialog.h
+    src/updatebanner.h
+    src/updater.h
 )
 
 set(TRANSLATION_FILES
@@ -68,6 +94,8 @@ endforeach()
 add_executable(deepin-herdr ${SOURCES} ${HEADERS} ${QM_FILES})
 
 target_include_directories(deepin-herdr PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/terminalwidget/lib
+    # committed qtermwidget_export.h, used when linking the system library
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/terminalwidget
     ${CMAKE_CURRENT_BINARY_DIR}
 )

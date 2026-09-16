@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "settingsdialog.h"
+#include "updatebanner.h"
+#include "version.h"
 
 #include <DWidgetUtil>
 #include <DTitlebar>
@@ -12,7 +14,6 @@
 #include <QStandardPaths>
 #include <QVBoxLayout>
 #include <QLabel>
-#include <QUuid>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPointer>
@@ -24,6 +25,7 @@
 #include <QToolButton>
 #include <QActionGroup>
 #include <QSettings>
+#include <QTimer>
 
 #include <QLocalSocket>
 #include <QClipboard>
@@ -34,23 +36,25 @@
 static const char *HERDR_BINARY = "herdr";
 static const char *HERDR_CONFIG_DIR = "herdr";
 
-struct HerdrMirror {
-    const char *name;
-    const char *baseUrl;
-    const char *downloadPath;
-};
+// herdr upstream publishes single binaries per platform on GitHub releases
+static const char *HERDR_API_PATH = "repos/herdrdev/herdr/releases/latest";
+static const char *HERDR_ASSET_PREFIX = "herdr";
+// the app itself
+static const char *APP_API_PATH = "repos/re2zero/deepin-herdr/releases/latest";
+static const char *APP_ASSET_PREFIX = "deepin-herdr";
 
-static const HerdrMirror HERDR_MIRRORS[] = {
-    {"GitHub", "https://github.com", "/ogulcancelik/herdr/releases/download/v{ver}/herdr-linux-{arch}"},
-};
-
-static const char *HERDR_LATEST_VERSION = "0.6.6";
+namespace {
+constexpr int BANNER_HERDR = 0;
+constexpr int BANNER_APP = 1;
+constexpr int AUTO_CHECK_DELAY_MS = 4000;
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : DMainWindow(parent)
     , m_terminal(nullptr)
     , m_launchTimer(new QTimer(this))
     , m_launchAttempts(0)
+    , m_themeMenu(nullptr)
     , m_cursorShape(0)
 {
     resize(1200, 800);
@@ -143,32 +147,12 @@ MainWindow::MainWindow(QWidget *parent)
     // Load saved theme on startup
     QSettings settings("deepin-herdr", "deepin-herdr");
     QString savedTheme = settings.value("theme", "Auto").toString();
-
-    // Apply saved theme
-    if (savedTheme == "Light") {
-        m_lightThemeAction->trigger();
-    } else if (savedTheme == "Dark") {
-        m_darkThemeAction->trigger();
-    } else if (savedTheme == "Auto") {
-        m_autoThemeAction->trigger();
-    } else {
-        // Check if saved theme is a built-in color scheme
-        for (QAction *action : m_themeMenu->actions()) {
-            if (action != m_lightThemeAction && action != m_darkThemeAction && action != m_autoThemeAction) {
-                QString scheme = action->data().toString();
-                if (scheme.isEmpty()) {
-                    scheme = action->text();
-                }
-                if (scheme == savedTheme) {
-                    action->trigger();
-                    break;
-                }
-            }
-        }
-    }
+    applyThemeByKey(savedTheme);
 
     // Restore terminal font/size/cursor from persisted settings
     restoreTerminalSettings();
+
+    initUpdateSystem();
 
     m_launchTimer->setSingleShot(true);
     m_launchTimer->setInterval(500);
@@ -190,6 +174,9 @@ void MainWindow::initUI()
     auto *layout = new QVBoxLayout(centralWidget);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
+
+    m_banner = new UpdateBanner(centralWidget);
+    layout->addWidget(m_banner);
 
     m_terminal = new QTermWidget(0, centralWidget);
     layout->addWidget(m_terminal);
@@ -229,9 +216,10 @@ void MainWindow::initUI()
         });
 
     // Auto-copy on QTermWidget's native Shift+drag selection.
+    // Gated by the "copy on select" setting.
     connect(m_terminal, &QTermWidget::copyAvailable,
             m_terminal, [this](bool available) {
-        if (available) {
+        if (available && m_autoCopyOnSelect) {
             m_terminal->copyClipboard();
         }
     });
@@ -247,42 +235,179 @@ void MainWindow::initUI()
     }
 }
 
+void MainWindow::initUpdateSystem()
+{
+    m_herdrUpdater = new ReleaseUpdater(HERDR_API_PATH, HERDR_ASSET_PREFIX,
+                                        HERDR_BINARY, this);
+    m_appUpdater = new ReleaseUpdater(APP_API_PATH, APP_ASSET_PREFIX,
+                                      "deepin-herdr", this);
+
+    // Mirror preferences apply to both updaters
+    QSettings settings("deepin-herdr", "deepin-herdr");
+    const QString mode = settings.value("mirrorMode", "auto").toString();
+    ReleaseUpdater::MirrorMode m = ReleaseUpdater::MirrorMode::Auto;
+    if (mode == "direct") m = ReleaseUpdater::MirrorMode::DirectFirst;
+    else if (mode == "mirror") m = ReleaseUpdater::MirrorMode::MirrorFirst;
+    for (ReleaseUpdater *u : {m_herdrUpdater, m_appUpdater}) {
+        u->setMirrorMode(m);
+        u->setCustomMirrorPrefix(settings.value("customMirrorUrl").toString());
+    }
+
+    // Update-available handling for background checks. The settings dialog
+    // triggers the same checks; these handlers drive the banner.
+    connect(m_herdrUpdater, &ReleaseUpdater::checkFinished, this,
+            [this](bool ok, const ReleaseUpdater::Release &release, const QString &) {
+        if (!ok || m_herdrUpdater->isDownloading()) {
+            return;
+        }
+        if (m_herdrVersion.isEmpty()
+            || ReleaseUpdater::compareVersions(release.version, m_herdrVersion) <= 0) {
+            return;
+        }
+        QSettings store("deepin-herdr", "deepin-herdr");
+        if (store.value("skippedHerdrVersion").toString() == release.version) {
+            return;
+        }
+        queueBanner(BANNER_HERDR,
+                    QObject::tr("herdr %1 is available").arg(release.version),
+                    QObject::tr("Update"), release);
+    });
+
+    connect(m_appUpdater, &ReleaseUpdater::checkFinished, this,
+            [this](bool ok, const ReleaseUpdater::Release &release, const QString &) {
+        if (!ok) {
+            return;
+        }
+        if (ReleaseUpdater::compareVersions(release.version, APP_VERSION) <= 0) {
+            return;
+        }
+        QSettings store("deepin-herdr", "deepin-herdr");
+        if (store.value("skippedAppVersion").toString() == release.version) {
+            return;
+        }
+        queueBanner(BANNER_APP,
+                    QObject::tr("deepin-herdr %1 is available").arg(release.version),
+                    QObject::tr("View"), release);
+    });
+
+    // Banner actions
+    connect(m_banner, &UpdateBanner::actionTriggered, this, [this]() {
+        if (m_currentBanner.kind == BANNER_HERDR) {
+            m_banner->showProgress(0);
+            m_herdrUpdater->downloadAndInstall(m_currentBanner.release);
+        } else {
+            QDesktopServices::openUrl(QUrl(m_appUpdater->releasesPageUrl()));
+            m_banner->hide();
+            showNextBanner();
+        }
+    });
+
+    connect(m_herdrUpdater, &ReleaseUpdater::installProgress, this, [this](int percent) {
+        if (m_banner->isVisible() && m_currentBanner.kind == BANNER_HERDR) {
+            m_banner->showProgress(percent);
+        }
+    });
+
+    connect(m_herdrUpdater, &ReleaseUpdater::installFinished, this,
+            [this](bool ok, const QString &error) {
+        if (!m_banner->isVisible() || m_currentBanner.kind != BANNER_HERDR) {
+            return; // install was started elsewhere (first run / settings page)
+        }
+        if (ok) {
+            m_banner->showDone(QObject::tr("herdr updated. Restart the herdr server to apply."));
+        } else {
+            m_banner->showError(QObject::tr("herdr update failed: %1").arg(error));
+        }
+    });
+
+    connect(m_banner, &UpdateBanner::skipTriggered, this, [this]() {
+        QSettings store("deepin-herdr", "deepin-herdr");
+        const QString key = (m_currentBanner.kind == BANNER_HERDR)
+            ? "skippedHerdrVersion" : "skippedAppVersion";
+        store.setValue(key, m_currentBanner.release.version);
+        showNextBanner();
+    });
+
+    connect(m_banner, &UpdateBanner::dismissed, this,
+            &MainWindow::showNextBanner);
+
+    // Deferred background update check
+    QTimer::singleShot(AUTO_CHECK_DELAY_MS, this, &MainWindow::autoCheckUpdates);
+}
+
+void MainWindow::autoCheckUpdates()
+{
+    QSettings settings("deepin-herdr", "deepin-herdr");
+    if (!settings.value("autoCheckUpdates", true).toBool()) {
+        return;
+    }
+    m_herdrUpdater->checkLatest();
+    m_appUpdater->checkLatest();
+}
+
+void MainWindow::queueBanner(int kind, const QString &title, const QString &actionText,
+                             const ReleaseUpdater::Release &release)
+{
+    for (const BannerRequest &r : m_bannerQueue) {
+        if (r.kind == kind && r.release.version == release.version) {
+            return;
+        }
+    }
+    if (m_banner->isVisible() && m_currentBanner.kind == kind
+            && m_currentBanner.release.version == release.version) {
+        return;
+    }
+
+    BannerRequest request;
+    request.kind = kind;
+    request.title = title;
+    request.actionText = actionText;
+    request.release = release;
+    m_bannerQueue.append(request);
+
+    if (!m_banner->isVisible()) {
+        showNextBanner();
+    }
+}
+
+void MainWindow::showNextBanner()
+{
+    if (m_bannerQueue.isEmpty()) {
+        return;
+    }
+    // An in-flight install owns the banner; keep the request queued.
+    if (m_bannerQueue.first().kind == BANNER_HERDR && m_herdrUpdater->isDownloading()) {
+        return;
+    }
+    m_currentBanner = m_bannerQueue.takeFirst();
+    m_banner->showUpdate(m_currentBanner.title, m_currentBanner.actionText);
+}
+
 void MainWindow::checkHerdrAndStart()
 {
     if (!findHerdrBinary().isEmpty()) {
+        detectHerdrVersion();
         QString socketPath = QDir::homePath() + "/.config/" + HERDR_CONFIG_DIR
             + "/herdr-client.sock";
         ensureServerRunning(socketPath);
         return;
     }
 
-    installHerdr();
+    runFirstRunInstall();
 }
 
-MainWindow::HerdrRelease MainWindow::selectRelease() const
+// First run: fetch the latest release from the API (version + digest) and
+// install it atomically through ReleaseUpdater.
+void MainWindow::runFirstRunInstall()
 {
-    QString arch = QSysInfo::buildCpuArchitecture();
-    QString archSuffix = (arch == "arm64") ? "aarch64" : "x86_64";
-
-    HerdrRelease release;
-    release.version = HERDR_LATEST_VERSION;
-    release.url = QString(HERDR_MIRRORS[0].baseUrl) + QString(HERDR_MIRRORS[0].downloadPath)
-        .arg(HERDR_LATEST_VERSION, archSuffix);
-    return release;
-}
-
-void MainWindow::installHerdr()
-{
-    HerdrRelease release = selectRelease();
-
     QPointer<DDialog> dlg = new DDialog(this);
     dlg->setTitle(QObject::tr("Installing herdr"));
     dlg->setMessage(QObject::tr("herdr terminal workspace manager is required.\n"
-                                "Downloading v%1...").arg(release.version));
+                                "Fetching release information…"));
     dlg->addButton(QObject::tr("Cancel"));
     dlg->setCloseButtonVisible(true);
 
-    auto *progress = new DProgressBar(dlg);
+    QPointer<DProgressBar> progress = new DProgressBar(dlg);
     progress->setRange(0, 100);
     progress->setValue(0);
     progress->setFixedWidth(300);
@@ -290,85 +415,87 @@ void MainWindow::installHerdr()
 
     dlg->show();
 
-    auto *nam = new QNetworkAccessManager(this);
-    QNetworkReply *reply = nam->get(QNetworkRequest(QUrl(release.url)));
+    auto cancelled = QSharedPointer<bool>::create(false);
+    connect(dlg, &DDialog::closed, this, [this, cancelled]() {
+        *cancelled = true;
+        m_herdrUpdater->cancelDownload();
+        close();
+    });
 
-    connect(reply, &QNetworkReply::downloadProgress, this,
-        [progress](qint64 received, qint64 total) {
-            if (total > 0) {
-                progress->setValue(static_cast<int>(received * 100 / total));
-            }
-        });
+    // One check, one install, one outcome — these fire once per first run.
+    connect(m_herdrUpdater, &ReleaseUpdater::checkFinished, this,
+            [this, dlg, cancelled](bool ok, const ReleaseUpdater::Release &release, const QString &error) {
+        if (!dlg || *cancelled) {
+            return;
+        }
+        if (!ok) {
+            dlg->close();
+            dlg->deleteLater();
+            auto *errDlg = new DDialog(this);
+            errDlg->setTitle(QObject::tr("Download Failed"));
+            errDlg->setMessage(QObject::tr("Failed to fetch herdr release info: %1\n"
+                                         "Please install herdr manually to ~/.local/bin/herdr")
+                .arg(error));
+            errDlg->addButton(QObject::tr("OK"));
+            errDlg->exec();
+            errDlg->deleteLater();
+            close();
+            return;
+        }
+        dlg->setMessage(QObject::tr("Downloading v%1…").arg(release.version));
+        m_herdrUpdater->downloadAndInstall(release);
+    }, Qt::SingleShotConnection);
 
-    connect(reply, &QNetworkReply::readyRead, this,
-        [this, reply, release, dlg]() {
-            if (reply->error() != QNetworkReply::NoError && reply->error() != QNetworkReply::OperationCanceledError) {
-                return;
-            }
-        });
+    connect(m_herdrUpdater, &ReleaseUpdater::installProgress, this,
+            [progress](int percent) {
+        if (progress) {
+            progress->setValue(percent);
+        }
+    }, Qt::SingleShotConnection);
 
-    connect(reply, &QNetworkReply::finished, this,
-        [this, reply, release, dlg]() {
-            reply->deleteLater();
-            if (dlg) {
-                dlg->close();
-                dlg->deleteLater();
-            }
+    connect(m_herdrUpdater, &ReleaseUpdater::installFinished, this,
+            [this, dlg, cancelled](bool ok, const QString &error) {
+        if (*cancelled) {
+            return;
+        }
+        if (dlg) {
+            dlg->close();
+            dlg->deleteLater();
+        }
+        if (!ok) {
+            auto *errDlg = new DDialog(this);
+            errDlg->setTitle(QObject::tr("Download Failed"));
+            errDlg->setMessage(QObject::tr("Failed to download herdr: %1\n"
+                                         "Please install herdr manually to ~/.local/bin/herdr")
+                .arg(error));
+            errDlg->addButton(QObject::tr("OK"));
+            errDlg->exec();
+            errDlg->deleteLater();
+            close();
+            return;
+        }
+        checkHerdrAndStart();
+    }, Qt::SingleShotConnection);
 
-            if (reply->error() != QNetworkReply::NoError) {
-                auto *errDlg = new DDialog(this);
-                errDlg->setTitle(QObject::tr("Download Failed"));
-                errDlg->setMessage(QObject::tr("Failed to download herdr: %1\n"
-                                             "Please install herdr manually to ~/.local/bin/herdr")
-                    .arg(reply->errorString()));
-                errDlg->addButton(QObject::tr("OK"));
-                errDlg->exec();
-                errDlg->deleteLater();
-                close();
-                return;
-            }
+    m_herdrUpdater->checkLatest();
+}
 
-            QString installDir = QDir::homePath() + "/.local/bin";
-            QDir().mkpath(installDir);
-            QString installPath = installDir + "/" + HERDR_BINARY;
-
-            QFile::remove(installPath);
-            if (!QFile::rename(reply->property("tempFile").toString(), installPath)) {
-                QByteArray data = reply->readAll();
-                QFile out(installPath);
-                if (out.open(QIODevice::WriteOnly)) {
-                    out.write(data);
-                    out.close();
-                }
-            }
-            QFile::setPermissions(installPath,
-                QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner
-                | QFile::ReadGroup | QFile::ExeGroup
-                | QFile::ReadOther | QFile::ExeOther);
-
-            checkHerdrAndStart();
-        });
-
-    QString tempPath = QDir::tempPath() + "/herdr-download-" + QUuid::createUuid().toString(QUuid::WithoutBraces);
-    reply->setProperty("tempFile", tempPath);
-
-    auto *tempFile = new QFile(tempPath);
-    if (tempFile->open(QIODevice::WriteOnly)) {
-        connect(reply, &QNetworkReply::readyRead, this,
-            [reply, tempFile]() {
-                tempFile->write(reply->readAll());
-            });
-        connect(reply, &QNetworkReply::finished, this,
-            [tempFile]() {
-                tempFile->close();
-                tempFile->deleteLater();
-            });
-    } else {
-        delete tempFile;
+void MainWindow::detectHerdrVersion()
+{
+    const QString binary = findHerdrBinary();
+    if (binary.isEmpty()) {
+        return;
     }
-
-    connect(dlg, &DDialog::closed, this, [reply]() {
-        reply->abort();
+    auto *proc = new QProcess(this);
+    proc->start(binary, {"--version"});
+    connect(proc, &QProcess::finished, this, [this, proc](int, QProcess::ExitStatus) {
+        // output like "herdr 0.8.2"
+        const QStringList parts =
+            QString::fromUtf8(proc->readAllStandardOutput()).simplified().split(' ');
+        proc->deleteLater();
+        if (parts.size() >= 2) {
+            m_herdrVersion = parts.at(1);
+        }
     });
 }
 
@@ -528,6 +655,35 @@ void MainWindow::switchThemeAction(QAction *action)
     }
 }
 
+void MainWindow::applyThemeByKey(const QString &key)
+{
+    if (!m_themeMenu) {
+        return;
+    }
+    QAction *target = nullptr;
+    if (key == "Light") {
+        target = m_lightThemeAction;
+    } else if (key == "Dark") {
+        target = m_darkThemeAction;
+    } else if (key == "Auto") {
+        target = m_autoThemeAction;
+    } else {
+        for (QAction *action : m_themeMenu->actions()) {
+            if (action == m_lightThemeAction || action == m_darkThemeAction
+                    || action == m_autoThemeAction) {
+                continue;
+            }
+            if (action->data().toString() == key) {
+                target = action;
+                break;
+            }
+        }
+    }
+    if (target) {
+        switchThemeAction(target);
+    }
+}
+
 void MainWindow::restoreTerminalSettings()
 {
     QSettings settings("deepin-herdr", "deepin-herdr");
@@ -558,28 +714,68 @@ void MainWindow::restoreTerminalSettings()
             static_cast<QTermWidget::KeyboardCursorShape>(m_cursorShape));
     }
 
+    // Cursor blink
+    m_terminal->setBlinkingCursor(settings.value("cursorBlink", false).toBool());
+
+    // Scrollback buffer (-1 = infinite)
+    m_terminal->setHistorySize(settings.value("scrollbackLines", 1000).toInt());
+
+    // Copy on selection
+    m_autoCopyOnSelect = settings.value("autoCopyOnSelect", true).toBool();
+
+    // Background transparency
+    const qreal opacity = settings.value("terminalOpacity", 1.0).toDouble();
+    if (opacity < 1.0) {
+        m_terminal->setTerminalOpacity(opacity);
+        setTranslucentBackground(true);
+    }
+
     // m_originalFont serves as the Ctrl+0 baseline — now reflects persisted size/family
     m_originalFont = m_terminal->getTerminalFont();
 }
 
 void MainWindow::openSettings()
 {
-    auto *dlg = new SettingsDialog(m_terminal, m_cursorShape, this);
-    connect(dlg, &SettingsDialog::settingsChanged,
-            this, &MainWindow::onSettingsChanged);
+    auto *dlg = new SettingsDialog(m_terminal, this);
+    connect(dlg, &SettingsDialog::settingsChanged, this, &MainWindow::onSettingsChanged);
+    connect(dlg, &SettingsDialog::themeSelected, this, &MainWindow::onThemeSelected);
+    connect(dlg, &SettingsDialog::transparencyChanged, this, &MainWindow::onTransparencyChanged);
+    connect(dlg, &SettingsDialog::autoCopyChanged, this, &MainWindow::onAutoCopyChanged);
     connect(dlg, &DDialog::closed, dlg, &QObject::deleteLater);
     dlg->show();
 }
 
-void MainWindow::onSettingsChanged(const QString &fontFamily, int fontSize, int cursorShape)
+void MainWindow::onSettingsChanged(const SettingsDialog::TerminalSettings &settings)
 {
-    QSettings settings("deepin-herdr", "deepin-herdr");
-    settings.setValue("fontFamily", fontFamily);
-    settings.setValue("fontSize", fontSize);
-    settings.setValue("cursorShape", cursorShape);
+    QSettings store("deepin-herdr", "deepin-herdr");
+    store.setValue("fontFamily", settings.fontFamily);
+    store.setValue("fontSize", settings.fontSize);
+    store.setValue("cursorShape", settings.cursorShape);
+    store.setValue("cursorBlink", settings.cursorBlink);
+    store.setValue("scrollbackLines", settings.scrollbackLines);
+    store.setValue("autoCopyOnSelect", settings.autoCopyOnSelect);
 
-    m_cursorShape = cursorShape;
+    m_cursorShape = settings.cursorShape;
+    m_autoCopyOnSelect = settings.autoCopyOnSelect;
 
     // Update Ctrl+0 baseline to the persisted font state
     m_originalFont = m_terminal->getTerminalFont();
+}
+
+void MainWindow::onThemeSelected(const QString &key)
+{
+    applyThemeByKey(key);
+}
+
+void MainWindow::onTransparencyChanged(qreal opacity)
+{
+    m_terminal->setTerminalOpacity(opacity);
+    setTranslucentBackground(opacity < 1.0);
+    QSettings store("deepin-herdr", "deepin-herdr");
+    store.setValue("terminalOpacity", opacity);
+}
+
+void MainWindow::onAutoCopyChanged(bool enabled)
+{
+    m_autoCopyOnSelect = enabled;
 }
