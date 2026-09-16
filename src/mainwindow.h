@@ -15,6 +15,7 @@ class QTimer;
 class QMenu;
 class QAction;
 class QFont;
+class AgentMonitor;
 class UpdateBanner;
 
 // Theme name mapping
@@ -49,6 +50,8 @@ private slots:
     void onThemeSelected(const QString &key);
     void onTransparencyChanged(qreal opacity);
     void onAutoCopyChanged(bool enabled);
+    void onAgentAttention(const QString &paneId, const QString &agent,
+                          const QString &title, const QString &cwd, const QString &status);
 
 private:
     void initUI();
@@ -59,6 +62,7 @@ private:
     void launchClient();
     QString findHerdrBinary() const;
     void detectHerdrVersion();
+    void startAgentMonitor();
     void autoCheckUpdates();
     void queueBanner(int kind, const QString &title, const QString &actionText,
                      const ReleaseUpdater::Release &release);
@@ -87,6 +91,7 @@ private:
     ReleaseUpdater *m_herdrUpdater = nullptr;
     ReleaseUpdater *m_appUpdater = nullptr;
     UpdateBanner *m_banner = nullptr;
+    AgentMonitor *m_agentMonitor = nullptr;
     QString m_herdrVersion;
     QVector<BannerRequest> m_bannerQueue;
     BannerRequest m_currentBanner;

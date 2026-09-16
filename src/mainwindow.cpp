@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "settingsdialog.h"
 #include "updatebanner.h"
+#include "agentmonitor.h"
 #include "version.h"
 
 #include <DWidgetUtil>
@@ -29,6 +30,9 @@
 
 #include <QLocalSocket>
 #include <QClipboard>
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusMessage>
 
 #include <qtermwidget.h>
 #include <DGuiApplicationHelper>
@@ -387,6 +391,7 @@ void MainWindow::checkHerdrAndStart()
 {
     if (!findHerdrBinary().isEmpty()) {
         detectHerdrVersion();
+        startAgentMonitor();
         QString socketPath = QDir::homePath() + "/.config/" + HERDR_CONFIG_DIR
             + "/herdr-client.sock";
         ensureServerRunning(socketPath);
@@ -394,6 +399,64 @@ void MainWindow::checkHerdrAndStart()
     }
 
     runFirstRunInstall();
+}
+
+// Desktop notifications for herdr agent state transitions (blocked /
+// done / optionally idle). Cheap JSON poll through the herdr CLI.
+void MainWindow::startAgentMonitor()
+{
+    if (!m_agentMonitor) {
+        m_agentMonitor = new AgentMonitor(findHerdrBinary(), this);
+        connect(m_agentMonitor, &AgentMonitor::agentAttention,
+                this, &MainWindow::onAgentAttention);
+    }
+    m_agentMonitor->start();
+}
+
+void MainWindow::onAgentAttention(const QString &paneId, const QString &agent,
+                                  const QString &title, const QString &cwd, const QString &status)
+{
+    Q_UNUSED(paneId);
+    // the user is already looking at the app
+    if (isActiveWindow()) {
+        return;
+    }
+
+    QString stateText;
+    if (status == QLatin1String("blocked")) {
+        stateText = tr("waiting for your input");
+    } else if (status == QLatin1String("done")) {
+        stateText = tr("task finished");
+    } else {
+        stateText = tr("idle");
+    }
+
+    QString body = title;
+    if (!cwd.isEmpty()) {
+        body += body.isEmpty() ? cwd : QStringLiteral("\n") + cwd;
+    }
+
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MAC)
+    QDBusInterface notifications("org.freedesktop.Notifications",
+                                 "/org/freedesktop/Notifications",
+                                 "org.freedesktop.Notifications",
+                                 QDBusConnection::sessionBus());
+    if (!notifications.isValid()) {
+        return;
+    }
+    QVariantMap hints;
+    hints.insert(QStringLiteral("desktop-entry"), QStringLiteral("deepin-herdr"));
+    notifications.asyncCallWithArgumentList("Notify", {
+        QVariant(QStringLiteral("deepin-herdr")),
+        QVariant::fromValue(static_cast<uint>(0)),
+        QVariant(QStringLiteral("deepin-herdr")),
+        QVariant(tr("%1 is %2").arg(agent, stateText)),
+        QVariant(body),
+        QStringList(),
+        hints,
+        QVariant::fromValue(-1),
+    });
+#endif
 }
 
 // First run: fetch the latest release from the API (version + digest) and

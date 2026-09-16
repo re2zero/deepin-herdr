@@ -76,6 +76,8 @@ private:
     QLineEdit *m_customMirrorEdit;
     QPushButton *m_herdrCheckButton;
     QPushButton *m_herdrUpdateButton;
+    QCheckBox *m_agentNotifyCheck;
+    QCheckBox *m_agentNotifyIdleCheck;
 
     // about page
     QLabel *m_appStatus;

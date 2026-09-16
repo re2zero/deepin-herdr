@@ -143,6 +143,8 @@ SettingsDialog::SettingsDialog(QTermWidget *terminal, MainWindow *window)
         store.setValue("mirrorMode", m_mirrorCombo->currentData().toString());
         store.setValue("customMirrorUrl", m_customMirrorEdit->text().trimmed());
         store.setValue("autoCheckUpdates", m_autoCheckCheck->isChecked());
+        store.setValue("agentNotify", m_agentNotifyCheck->isChecked());
+        store.setValue("agentNotifyIdle", m_agentNotifyIdleCheck->isChecked());
     });
 }
 
@@ -380,6 +382,17 @@ QWidget *SettingsDialog::createHerdrPage()
     };
     connect(m_mirrorCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, applyMirror);
     connect(m_customMirrorEdit, &QLineEdit::textChanged, this, applyMirror);
+
+    // Agent state notifications
+    m_agentNotifyCheck = new QCheckBox(QObject::tr("Notify when an agent needs attention"), page);
+    m_agentNotifyCheck->setChecked(settings.value("agentNotify", true).toBool());
+    form->addRow(QString(), m_agentNotifyCheck);
+
+    m_agentNotifyIdleCheck = new QCheckBox(QObject::tr("Also notify when an agent goes idle"), page);
+    m_agentNotifyIdleCheck->setChecked(settings.value("agentNotifyIdle", false).toBool());
+    m_agentNotifyIdleCheck->setEnabled(m_agentNotifyCheck->isChecked());
+    connect(m_agentNotifyCheck, &QCheckBox::toggled, m_agentNotifyIdleCheck, &QWidget::setEnabled);
+    form->addRow(QString(), m_agentNotifyIdleCheck);
 
     return page;
 }

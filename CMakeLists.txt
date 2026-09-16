@@ -45,7 +45,7 @@ else()
 endif()
 message(STATUS "   >>> Build with DTK: Dtk${DTK_VERSION_MAJOR}")
 
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network LinguistTools)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network DBus LinguistTools)
 find_package(Dtk${DTK_VERSION_MAJOR} COMPONENTS Core Widget REQUIRED)
 
 find_package(PkgConfig REQUIRED)
@@ -73,6 +73,7 @@ set(SOURCES
     src/settingsdialog.cpp
     src/updatebanner.cpp
     src/updater.cpp
+    src/agentmonitor.cpp
 )
 
 set(HEADERS
@@ -80,6 +81,7 @@ set(HEADERS
     src/settingsdialog.h
     src/updatebanner.h
     src/updater.h
+    src/agentmonitor.h
 )
 
 set(TRANSLATION_FILES
@@ -110,6 +112,7 @@ target_link_libraries(deepin-herdr PRIVATE
     Qt${QT_VERSION_MAJOR}::Gui
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Network
+    Qt${QT_VERSION_MAJOR}::DBus
     ${QT_EXTRA_LIBS}
     Dtk${DTK_VERSION_MAJOR}::Core
     Dtk${DTK_VERSION_MAJOR}::Widget
