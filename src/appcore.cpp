@@ -633,7 +633,8 @@ void AppCore::switchThemeAction(QAction *action)
     QSettings settings("deepin-herdr", "deepin-herdr");
 
     if (action == m_lightThemeAction) {
-        // Light theme: terminal follows light theme
+        // Light theme: UI palette and terminal both go light
+        Platform::applyUiTheme(Platform::UiTheme::Light);
         m_terminal->setColorScheme(QStringLiteral("Theme10"));
         settings.setValue(themeKey, "Light");
         for (QAction *a : m_themeMenu->actions()) {
@@ -643,7 +644,8 @@ void AppCore::switchThemeAction(QAction *action)
     }
 
     if (action == m_darkThemeAction) {
-        // Dark theme: terminal follows dark theme
+        // Dark theme: UI palette and terminal both go dark
+        Platform::applyUiTheme(Platform::UiTheme::Dark);
         m_terminal->setColorScheme(QStringLiteral("Theme7"));
         settings.setValue(themeKey, "Dark");
         for (QAction *a : m_themeMenu->actions()) {
@@ -663,6 +665,7 @@ void AppCore::switchThemeAction(QAction *action)
         }
 #endif
         m_terminal->setColorScheme(dark ? QStringLiteral("Theme7") : QStringLiteral("Theme10"));
+        Platform::applyUiTheme(Platform::UiTheme::Auto);
         settings.setValue(themeKey, "Auto");
         for (QAction *a : m_themeMenu->actions()) {
             a->setChecked(a == m_autoThemeAction);
@@ -670,7 +673,8 @@ void AppCore::switchThemeAction(QAction *action)
         return;
     }
 
-    // Extended theme: built-in terminal color scheme
+    // Extended theme: built-in terminal color scheme (terminal only —
+    // the UI palette keeps the Light/Dark/Auto choice)
     QString scheme = action->data().toString();
     if (scheme.isEmpty()) {
         scheme = action->text();

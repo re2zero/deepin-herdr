@@ -17,6 +17,11 @@ namespace Platform {
 
 bool useDtk();
 
+// Application UI theme (menus, dialogs) — distinct from the terminal
+// color scheme. Light/Dark force the palette, Auto follows the system.
+enum class UiTheme { Light, Dark, Auto };
+void applyUiTheme(UiTheme theme);
+
 // QApplication translation bootstrap for the current flavor.
 void loadTranslations(QApplication *app);
 

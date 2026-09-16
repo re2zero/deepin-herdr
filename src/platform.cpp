@@ -9,14 +9,19 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScreen>
+#include <QTimer>
+#include <QStyle>
+#include <QStyleHints>
 #include <QTranslator>
 #include <QVBoxLayout>
 
 #if HAVE_DTK
 #include <DApplication>
 #include <DDialog>
+#include <DGuiApplicationHelper>
 #include <DProgressBar>
 DWIDGET_USE_NAMESPACE
+DGUI_USE_NAMESPACE
 #endif
 
 namespace Platform {
@@ -88,6 +93,84 @@ void loadTranslations(QApplication *app)
             }
             translator->deleteLater();
         }
+    }
+}
+
+QPalette genericDarkPalette()
+{
+    QPalette p;
+    p.setColor(QPalette::Window, QColor(53, 53, 53));
+    p.setColor(QPalette::WindowText, Qt::white);
+    p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(127, 127, 127));
+    p.setColor(QPalette::Base, QColor(42, 42, 42));
+    p.setColor(QPalette::AlternateBase, QColor(66, 66, 66));
+    p.setColor(QPalette::ToolTipBase, Qt::white);
+    p.setColor(QPalette::ToolTipText, QColor(53, 53, 53));
+    p.setColor(QPalette::Text, Qt::white);
+    p.setColor(QPalette::Disabled, QPalette::Text, QColor(127, 127, 127));
+    p.setColor(QPalette::Dark, QColor(35, 35, 35));
+    p.setColor(QPalette::Shadow, QColor(20, 20, 20));
+    p.setColor(QPalette::Button, QColor(53, 53, 53));
+    p.setColor(QPalette::ButtonText, Qt::white);
+    p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(127, 127, 127));
+    p.setColor(QPalette::BrightText, Qt::red);
+    p.setColor(QPalette::Link, QColor(42, 130, 218));
+    p.setColor(QPalette::Highlight, QColor(42, 130, 218));
+    p.setColor(QPalette::Disabled, QPalette::Highlight, QColor(80, 80, 80));
+    p.setColor(QPalette::HighlightedText, Qt::white);
+    p.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor(127, 127, 127));
+    p.setColor(QPalette::PlaceholderText, QColor(127, 127, 127));
+    return p;
+}
+
+void applyUiTheme(UiTheme theme)
+{
+    // captured on the first call, which happens before any override
+    static const QString defaultStyle = QApplication::style()
+        ? QApplication::style()->objectName() : QString();
+    static const QPalette defaultPalette = QApplication::palette();
+
+#if HAVE_DTK
+    if (useDtk()) {
+        auto *helper = DGuiApplicationHelper::instance();
+        // Defer to the event loop: theme restoration runs while windows
+        // are being constructed, and dxcb reconfigures its frame on
+        // palette changes — never do that mid-init.
+        QTimer::singleShot(0, helper, [helper, theme]() {
+            switch (theme) {
+            case UiTheme::Light:
+                helper->setPaletteType(DGuiApplicationHelper::LightType);
+                break;
+            case UiTheme::Dark:
+                helper->setPaletteType(DGuiApplicationHelper::DarkType);
+                break;
+            case UiTheme::Auto:
+                helper->setPaletteType(DGuiApplicationHelper::UnknownType);
+                break;
+            }
+        });
+        return;
+    }
+#endif
+    // generic flavor. Note: on a deepin system the dtkgui platform theme
+    // hijacks application palettes and resists overrides — this path is
+    // meant for systems without the deepin stack.
+    bool dark = (theme == UiTheme::Dark);
+    if (theme == UiTheme::Auto) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+        dark = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+#else
+        dark = false;
+#endif
+    }
+    if (dark) {
+        QApplication::setStyle(QStringLiteral("Fusion"));
+        QApplication::setPalette(genericDarkPalette());
+    } else {
+        if (!defaultStyle.isEmpty()) {
+            QApplication::setStyle(defaultStyle);
+        }
+        QApplication::setPalette(defaultPalette);
     }
 }
 

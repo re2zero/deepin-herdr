@@ -17,15 +17,17 @@ UpdateBanner::UpdateBanner(QWidget *parent)
     m_message = new QLabel(this);
     layout->addWidget(m_message);
 
+    layout->addStretch();
+
     m_status = new QLabel(this);
     m_status->setVisible(false);
     layout->addWidget(m_status);
 
-    layout->addStretch();
-
     m_progress = new QProgressBar(this);
     m_progress->setRange(0, 100);
     m_progress->setFixedWidth(200);
+    m_progress->setFixedHeight(30);
+    m_progress->setTextVisible(false); // percentage lives in the front label
     m_progress->setVisible(false);
     layout->addWidget(m_progress);
 
