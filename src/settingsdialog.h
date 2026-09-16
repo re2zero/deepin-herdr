@@ -45,6 +45,9 @@ signals:
     void transparencyChanged(qreal opacity); // 0.3 ~ 1.0
     void autoCopyChanged(bool enabled);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
     QWidget *createTerminalPage();
     QWidget *createAppearancePage();
@@ -65,6 +68,7 @@ private:
     QSpinBox *m_scrollbackSpin;
     QCheckBox *m_autoCopyCheck;
     QLabel *m_monoWarning;
+    QWidget *m_monoWarningRow = nullptr;
 
     // appearance page
     QComboBox *m_themeCombo;

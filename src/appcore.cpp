@@ -769,7 +769,11 @@ void AppCore::restoreTerminalSettings()
 void AppCore::openSettings()
 {
     auto *content = new SettingsDialog(m_terminal, this);
-    Platform::showContentDialog(content, tr("Settings"), m_container->window(), [content, this] {
+    connect(content, &SettingsDialog::settingsChanged, this, &AppCore::onSettingsChanged);
+    connect(content, &SettingsDialog::themeSelected, this, &AppCore::onThemeSelected);
+    connect(content, &SettingsDialog::transparencyChanged, this, &AppCore::onTransparencyChanged);
+    connect(content, &SettingsDialog::autoCopyChanged, this, &AppCore::onAutoCopyChanged);
+    Platform::showContentDialog(content, tr("Settings"), m_container->window(), [content] {
         content->persist();
     });
 }
