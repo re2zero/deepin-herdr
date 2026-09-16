@@ -38,15 +38,29 @@ if(NOT DEFINED ENV{QT_SELECT})
 endif()
 message(STATUS "   >>> Build with Qt version: $ENV{QT_SELECT}")
 
-if(QT_VERSION_MAJOR EQUAL 6)
-    set(DTK_VERSION_MAJOR 6)
-else()
-    set(DTK_VERSION_MAJOR "")
+# DTK is optional: the runtime only uses it on deepin/UOS (Platform::useDtk).
+# Builds for other distros/OSes work without DTK dev packages.
+option(DISABLE_DTK "Skip DTK support even if found (generic Qt UI only)" OFF)
+set(HAVE_DTK 0)
+set(DTK_LINK_TARGETS "")
+if(UNIX AND NOT APPLE AND NOT DISABLE_DTK)
+    if(QT_VERSION_MAJOR EQUAL 6)
+        find_package(Dtk6 COMPONENTS Core Widget QUIET)
+        if(Dtk6_FOUND)
+            set(HAVE_DTK 1)
+            set(DTK_LINK_TARGETS Dtk6::Core Dtk6::Widget)
+        endif()
+    else()
+        find_package(Dtk COMPONENTS Core Widget QUIET)
+        if(Dtk_FOUND)
+            set(HAVE_DTK 1)
+            set(DTK_LINK_TARGETS Dtk::Core Dtk::Widget)
+        endif()
+    endif()
 endif()
-message(STATUS "   >>> Build with DTK: Dtk${DTK_VERSION_MAJOR}")
+message(STATUS "   >>> DTK support: ${HAVE_DTK}")
 
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Widgets Network DBus LinguistTools)
-find_package(Dtk${DTK_VERSION_MAJOR} COMPONENTS Core Widget REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ICU REQUIRED icu-i18n icu-uc IMPORTED_TARGET)
@@ -70,6 +84,8 @@ endif()
 set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
+    src/appcore.cpp
+    src/platform.cpp
     src/settingsdialog.cpp
     src/updatebanner.cpp
     src/updater.cpp
@@ -78,6 +94,8 @@ set(SOURCES
 
 set(HEADERS
     src/mainwindow.h
+    src/appcore.h
+    src/platform.h
     src/settingsdialog.h
     src/updatebanner.h
     src/updater.h
@@ -94,6 +112,8 @@ foreach(ts_file ${TRANSLATION_FILES})
 endforeach()
 
 add_executable(deepin-herdr ${SOURCES} ${HEADERS} ${QM_FILES})
+
+target_compile_definitions(deepin-herdr PRIVATE HAVE_DTK=${HAVE_DTK})
 
 target_include_directories(deepin-herdr PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/terminalwidget/lib
@@ -114,8 +134,7 @@ target_link_libraries(deepin-herdr PRIVATE
     Qt${QT_VERSION_MAJOR}::Network
     Qt${QT_VERSION_MAJOR}::DBus
     ${QT_EXTRA_LIBS}
-    Dtk${DTK_VERSION_MAJOR}::Core
-    Dtk${DTK_VERSION_MAJOR}::Widget
+    ${DTK_LINK_TARGETS}
     terminalwidget${QT_VERSION_MAJOR}
     PkgConfig::ICU
 )

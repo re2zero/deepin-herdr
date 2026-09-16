@@ -1,17 +1,16 @@
 #ifndef UPDATEBANNER_H
 #define UPDATEBANNER_H
 
-#include <DWidget>
-
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
-
-DWIDGET_USE_NAMESPACE
+#include <QWidget>
 
 // Non-modal strip shown above the terminal when an update is available.
 // States: info (action + skip + close), downloading (progress), done, error.
-class UpdateBanner : public DWidget {
+// Tracks application palette changes so it works under DTK themes and
+// plain Qt styles alike.
+class UpdateBanner : public QWidget {
     Q_OBJECT
 public:
     explicit UpdateBanner(QWidget *parent = nullptr);
@@ -25,6 +24,9 @@ signals:
     void actionTriggered();
     void skipTriggered();
     void dismissed();
+
+protected:
+    void changeEvent(QEvent *event) override;
 
 private:
     QLabel *m_icon;

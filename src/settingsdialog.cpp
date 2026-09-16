@@ -1,5 +1,5 @@
 #include "settingsdialog.h"
-#include "mainwindow.h"
+#include "appcore.h"
 #include "version.h"
 
 #include <QFormLayout>
@@ -62,12 +62,11 @@ QList<ThemeEntry> themeEntries()
 
 } // namespace
 
-SettingsDialog::SettingsDialog(QTermWidget *terminal, MainWindow *window)
-    : DDialog(window)
+SettingsDialog::SettingsDialog(QTermWidget *terminal, AppCore *core)
+    : QWidget(nullptr)
     , m_terminal(terminal)
-    , m_window(window)
+    , m_core(core)
 {
-    setTitle(QObject::tr("Settings"));
 
     QFont currentFont = m_terminal->getTerminalFont();
     m_settings.fontFamily = currentFont.family();
@@ -118,34 +117,10 @@ SettingsDialog::SettingsDialog(QTermWidget *terminal, MainWindow *window)
     layout->addWidget(pageList);
     layout->addWidget(stack, 1);
 
-    addContent(contentWidget);
-    addButton(QObject::tr("OK"));
-    setCloseButtonVisible(true);
-    setFixedWidth(640);
-
-    // Persist on close (close window = save current preview state)
-    connect(this, &DDialog::closed, this, [this]() {
-        if (m_persisted) {
-            return;
-        }
-        m_persisted = true;
-
-        m_settings.fontFamily = m_fontCombo->currentFont().family();
-        m_settings.fontSize = m_sizeSpinBox->value();
-        m_settings.cursorShape = m_cursorCombo->currentData().toInt();
-        m_settings.cursorBlink = m_blinkCheck->isChecked();
-        m_settings.scrollbackLines = m_scrollbackSpin->value();
-        m_settings.autoCopyOnSelect = m_autoCopyCheck->isChecked();
-        emit settingsChanged(m_settings);
-
-        // updater-related keys are owned by the dialog
-        QSettings store("deepin-herdr", "deepin-herdr");
-        store.setValue("mirrorMode", m_mirrorCombo->currentData().toString());
-        store.setValue("customMirrorUrl", m_customMirrorEdit->text().trimmed());
-        store.setValue("autoCheckUpdates", m_autoCheckCheck->isChecked());
-        store.setValue("agentNotify", m_agentNotifyCheck->isChecked());
-        store.setValue("agentNotifyIdle", m_agentNotifyIdleCheck->isChecked());
-    });
+    auto *outer = new QVBoxLayout(this);
+    outer->setContentsMargins(12, 12, 12, 12);
+    outer->addWidget(contentWidget);
+    setMinimumWidth(600);
 }
 
 QWidget *SettingsDialog::createTerminalPage()
@@ -292,7 +267,7 @@ QWidget *SettingsDialog::createHerdrPage()
 
     // Installed version
     m_herdrVersionLabel = new QLabel(page);
-    const QString installed = m_window->herdrVersion();
+    const QString installed = m_core->herdrVersion();
     m_herdrVersionLabel->setText(installed.isEmpty()
         ? QObject::tr("Unknown") : QStringLiteral("v%1").arg(installed));
     form->addRow(QObject::tr("Current version"), m_herdrVersionLabel);
@@ -310,7 +285,7 @@ QWidget *SettingsDialog::createHerdrPage()
     form->addRow(QString(), checkRow);
     form->addRow(QString(), m_herdrStatus);
 
-    ReleaseUpdater *updater = m_window->herdrUpdater();
+    ReleaseUpdater *updater = m_core->herdrUpdater();
     connect(m_herdrCheckButton, &QPushButton::clicked, this, [this, updater]() {
         m_herdrStatus->setText(QObject::tr("Checking…"));
         m_herdrUpdateButton->setVisible(false);
@@ -323,7 +298,7 @@ QWidget *SettingsDialog::createHerdrPage()
                     return;
                 }
                 m_herdrLatest = release;
-                const QString installed = m_window->herdrVersion();
+                const QString installed = m_core->herdrVersion();
                 const bool hasUpdate = installed.isEmpty()
                     || ReleaseUpdater::compareVersions(release.version, installed) > 0;
                 if (!hasUpdate) {
@@ -375,7 +350,7 @@ QWidget *SettingsDialog::createHerdrPage()
         ReleaseUpdater::MirrorMode m = ReleaseUpdater::MirrorMode::Auto;
         if (mode == "direct") m = ReleaseUpdater::MirrorMode::DirectFirst;
         else if (mode == "mirror") m = ReleaseUpdater::MirrorMode::MirrorFirst;
-        for (ReleaseUpdater *u : {m_window->herdrUpdater(), m_window->appUpdater()}) {
+        for (ReleaseUpdater *u : {m_core->herdrUpdater(), m_core->appUpdater()}) {
             u->setMirrorMode(m);
             u->setCustomMirrorPrefix(m_customMirrorEdit->text().trimmed());
         }
@@ -418,7 +393,7 @@ QWidget *SettingsDialog::createAboutPage()
     form->addRow(QString(), row);
     form->addRow(QString(), m_appStatus);
 
-    ReleaseUpdater *updater = m_window->appUpdater();
+    ReleaseUpdater *updater = m_core->appUpdater();
     connect(checkBtn, &QPushButton::clicked, this, [this, updater]() {
         m_appStatus->setText(QObject::tr("Checking…"));
         updater->checkLatest();
@@ -450,6 +425,25 @@ QWidget *SettingsDialog::createAboutPage()
     form->addRow(QString(), m_autoCheckCheck);
 
     return page;
+}
+
+void SettingsDialog::persist()
+{
+    m_settings.fontFamily = m_fontCombo->currentFont().family();
+    m_settings.fontSize = m_sizeSpinBox->value();
+    m_settings.cursorShape = m_cursorCombo->currentData().toInt();
+    m_settings.cursorBlink = m_blinkCheck->isChecked();
+    m_settings.scrollbackLines = m_scrollbackSpin->value();
+    m_settings.autoCopyOnSelect = m_autoCopyCheck->isChecked();
+    emit settingsChanged(m_settings);
+
+    // updater/notification keys are owned by the dialog
+    QSettings store("deepin-herdr", "deepin-herdr");
+    store.setValue("mirrorMode", m_mirrorCombo->currentData().toString());
+    store.setValue("customMirrorUrl", m_customMirrorEdit->text().trimmed());
+    store.setValue("autoCheckUpdates", m_autoCheckCheck->isChecked());
+    store.setValue("agentNotify", m_agentNotifyCheck->isChecked());
+    store.setValue("agentNotifyIdle", m_agentNotifyIdleCheck->isChecked());
 }
 
 void SettingsDialog::applyFontPreview()

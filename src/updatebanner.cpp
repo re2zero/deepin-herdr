@@ -1,14 +1,10 @@
 #include "updatebanner.h"
 
-#include <DGuiApplicationHelper>
-#include <DPalette>
-
+#include <QEvent>
 #include <QHBoxLayout>
 
-DGUI_USE_NAMESPACE
-
 UpdateBanner::UpdateBanner(QWidget *parent)
-    : DWidget(parent)
+    : QWidget(parent)
 {
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(12, 6, 12, 6);
@@ -60,19 +56,30 @@ UpdateBanner::UpdateBanner(QWidget *parent)
     });
     layout->addWidget(m_closeButton);
 
-    // Palette-driven colors so the strip tracks light/dark theme.
+    // track light/dark theme switches; DTK and plain Qt both rotate the
+    // application palette, which surfaces as a palette change event
     auto repolish = [this]() {
-        QPalette pal = DGuiApplicationHelper::instance()->applicationPalette();
+        QPalette pal = palette();
         pal.setColor(QPalette::Window, pal.color(QPalette::Base));
         setPalette(pal);
         setAutoFillBackground(true);
     };
     repolish();
-    connect(DGuiApplicationHelper::instance(), &DGuiApplicationHelper::themeTypeChanged,
-            this, repolish);
 
     setFixedHeight(44);
     hide();
+}
+
+void UpdateBanner::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::ApplicationPaletteChange
+            || event->type() == QEvent::PaletteChange) {
+        QPalette pal = palette();
+        pal.setColor(QPalette::Window, pal.color(QPalette::Base));
+        setPalette(pal);
+        setAutoFillBackground(true);
+    }
+    QWidget::changeEvent(event);
 }
 
 void UpdateBanner::showUpdate(const QString &message, const QString &actionText)

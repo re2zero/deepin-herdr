@@ -1,11 +1,9 @@
 #ifndef SETTINGSDIALOG_H
 #define SETTINGSDIALOG_H
 
-#include <DDialog>
+#include <QWidget>
 
 #include "updater.h"
-
-DWIDGET_USE_NAMESPACE
 
 class QTermWidget;
 class QFontComboBox;
@@ -18,12 +16,13 @@ class QListWidget;
 class QSlider;
 class QLineEdit;
 class QPushButton;
-class MainWindow;
+class AppCore;
 
-// Paginated settings: Terminal / Appearance / herdr / About & Updates.
-// Live preview applies immediately; everything persists when the dialog
-// closes (matching the original persist-on-close behavior).
-class SettingsDialog : public DDialog {
+// Settings UI as a plain content widget (nav list + pages). It is hosted
+// in a DDialog on deepin/UOS and in a plain QDialog elsewhere — see
+// Platform::showContentDialog. Live preview applies immediately;
+// persist() writes everything (call on dialog close).
+class SettingsDialog : public QWidget {
     Q_OBJECT
 public:
     struct TerminalSettings {
@@ -35,7 +34,10 @@ public:
         bool autoCopyOnSelect = true;
     };
 
-    SettingsDialog(QTermWidget *terminal, MainWindow *window);
+    SettingsDialog(QTermWidget *terminal, AppCore *core);
+
+    // write all current values (idempotent)
+    void persist();
 
 signals:
     void settingsChanged(const SettingsDialog::TerminalSettings &settings);
@@ -53,7 +55,7 @@ private:
     void updateMonoWarning(const QString &family);
 
     QTermWidget *m_terminal;
-    MainWindow *m_window;
+    AppCore *m_core;
 
     // terminal page
     QFontComboBox *m_fontCombo;
@@ -88,7 +90,6 @@ private:
     ReleaseUpdater::Release m_herdrLatest;
     ReleaseUpdater::Release m_appLatest;
     QString m_themeKey;
-    bool m_persisted = false;
 };
 
 #endif // SETTINGSDIALOG_H
