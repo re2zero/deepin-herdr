@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(deepin-herdr LANGUAGES CXX)
+project(mudi LANGUAGES CXX)
 
 # Default version, overridden by debian/rules via -DAPP_VERSION
 if(NOT DEFINED APP_VERSION)
@@ -110,19 +110,19 @@ set(HEADERS
 )
 
 set(TRANSLATION_FILES
-    translations/deepin-herdr.ts
-    translations/deepin-herdr_zh_CN.ts
+    translations/mudi.ts
+    translations/mudi_zh_CN.ts
 )
 
 foreach(ts_file ${TRANSLATION_FILES})
     qt_add_translation(QM_FILES ${ts_file})
 endforeach()
 
-add_executable(deepin-herdr ${SOURCES} ${HEADERS} ${QM_FILES})
+add_executable(mudi ${SOURCES} ${HEADERS} ${QM_FILES})
 
-target_compile_definitions(deepin-herdr PRIVATE HAVE_DTK=${HAVE_DTK})
+target_compile_definitions(mudi PRIVATE HAVE_DTK=${HAVE_DTK})
 
-target_include_directories(deepin-herdr PRIVATE
+target_include_directories(mudi PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/terminalwidget/lib
     # committed qtermwidget_export.h, used when linking the system library
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/terminalwidget
@@ -134,7 +134,7 @@ if(QT_VERSION_MAJOR EQUAL 6)
     list(APPEND QT_EXTRA_LIBS Qt6::Core5Compat)
 endif()
 
-target_link_libraries(deepin-herdr PRIVATE
+target_link_libraries(mudi PRIVATE
     Qt${QT_VERSION_MAJOR}::Core
     Qt${QT_VERSION_MAJOR}::Gui
     Qt${QT_VERSION_MAJOR}::Widgets
@@ -146,7 +146,7 @@ target_link_libraries(deepin-herdr PRIVATE
     PkgConfig::ICU
 )
 
-install(TARGETS deepin-herdr DESTINATION bin)
-install(FILES src/assets/deepin-herdr.desktop DESTINATION share/applications)
-install(FILES src/assets/deepin-herdr.svg DESTINATION share/icons/hicolor/scalable/apps)
-install(FILES ${QM_FILES} DESTINATION share/deepin-herdr/translations)
+install(TARGETS mudi DESTINATION bin)
+install(FILES src/assets/mudi.desktop DESTINATION share/applications)
+install(FILES src/assets/mudi.svg DESTINATION share/icons/hicolor/scalable/apps)
+install(FILES ${QM_FILES} DESTINATION share/mudi/translations)

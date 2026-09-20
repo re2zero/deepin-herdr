@@ -41,7 +41,7 @@
     </message>
     <message>
         <location filename="../src/appcore.cpp" line="279"/>
-        <source>deepin-herdr %1 is available</source>
+        <source>MuDi %1 is available</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -500,12 +500,12 @@ Please install herdr manually to ~/.local/bin/herdr</translation>
     <name>main</name>
     <message>
         <location filename="../src/main.cpp" line="35"/>
-        <source>deepin-herdr is a DTK frontend for herdr terminal
-workspace manager.
+        <source>MuDi (牧笛) is a GUI frontend for the herdr terminal
+workspace manager for AI coding agents.
 herdr provides a terminal-based IDE experience with
 multi-pane workspaces, tabs, and AI agent integration.</source>
-        <translation>deepin-herdr is a DTK frontend for herdr terminal
-workspace manager.
+        <translation>MuDi (牧笛) is a GUI frontend for the herdr terminal
+workspace manager for AI coding agents.
 herdr provides a terminal-based IDE experience with
 multi-pane workspaces, tabs, and AI agent integration.</translation>
     </message>

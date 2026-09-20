@@ -1,5 +1,6 @@
 #include "settingsdialog.h"
 #include "appcore.h"
+#include "platform.h"
 #include "version.h"
 
 #include <QCheckBox>
@@ -153,7 +154,7 @@ SettingsDialog::SettingsDialog(QTermWidget *terminal, AppCore *core)
     m_settings.fontFamily = currentFont.family();
     m_settings.fontSize = currentFont.pointSize() > 0 ? currentFont.pointSize() : DEFAULT_FONT_SIZE;
 
-    QSettings s("deepin-herdr", "deepin-herdr");
+    QSettings s = Platform::appSettings();
     m_settings.cursorShape = s.value("cursorShape", 0).toInt();
     if (m_settings.cursorShape < 0 || m_settings.cursorShape > 2) {
         m_settings.cursorShape = 0;
@@ -333,7 +334,7 @@ QWidget *SettingsDialog::createAppearancePage()
     rows.add(makeRow(QObject::tr("Theme"), m_themeCombo));
 
     // Background transparency
-    QSettings settings("deepin-herdr", "deepin-herdr");
+    QSettings settings = Platform::appSettings();
     m_opacitySlider = new QSlider(Qt::Horizontal, page);
     m_opacitySlider->setRange(MIN_OPACITY_PERCENT, 100);
     const int opacityPercent = qBound(MIN_OPACITY_PERCENT,
@@ -441,7 +442,7 @@ QWidget *SettingsDialog::createHerdrPage()
             });
 
     // Download source (mirror) settings
-    QSettings settings("deepin-herdr", "deepin-herdr");
+    QSettings settings = Platform::appSettings();
     m_mirrorCombo = new QComboBox(page);
     m_mirrorCombo->addItem(QObject::tr("Auto (recommended)"), "auto");
     m_mirrorCombo->addItem(QObject::tr("GitHub direct"), "direct");
@@ -541,7 +542,7 @@ QWidget *SettingsDialog::createAboutPage()
     });
 
     m_autoCheckCheck = new QCheckBox(QObject::tr("Check for updates on startup"), page);
-    QSettings aboutSettings("deepin-herdr", "deepin-herdr");
+    QSettings aboutSettings = Platform::appSettings();
     m_autoCheckCheck->setChecked(aboutSettings.value("autoCheckUpdates", true).toBool());
     rows.add(makeFullRow(m_autoCheckCheck));
 
@@ -560,7 +561,7 @@ void SettingsDialog::persist()
     emit settingsChanged(m_settings);
 
     // updater/notification keys are owned by the dialog
-    QSettings store("deepin-herdr", "deepin-herdr");
+    QSettings store = Platform::appSettings();
     store.setValue("mirrorMode", m_mirrorCombo->currentData().toString());
     store.setValue("customMirrorUrl", m_customMirrorEdit->text().trimmed());
     store.setValue("autoCheckUpdates", m_autoCheckCheck->isChecked());

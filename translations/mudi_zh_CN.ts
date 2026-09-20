@@ -40,8 +40,8 @@
     </message>
     <message>
         <location filename="../src/appcore.cpp" line="279" />
-        <source>deepin-herdr %1 is available</source>
-        <translation>deepin-herdr 有新版本 %1 可用</translation>
+        <source>MuDi %1 is available</source>
+        <translation>MuDi 有新版本 %1 可用</translation>
     </message>
     <message>
         <location filename="../src/appcore.cpp" line="280" />
@@ -192,8 +192,8 @@ Please install herdr manually to ~/.local/bin/herdr</source>
         <translation type="vanished">更新</translation>
     </message>
     <message>
-        <source>deepin-herdr %1 is available</source>
-        <translation type="vanished">deepin-herdr 有新版本 %1 可用</translation>
+        <source>MuDi %1 is available</source>
+        <translation type="vanished">MuDi 有新版本 %1 可用</translation>
     </message>
     <message>
         <source>View</source>
@@ -553,12 +553,12 @@ Please install herdr manually to ~/.local/bin/herdr</source>
     <name>main</name>
     <message>
         <location filename="../src/main.cpp" line="35" />
-        <source>deepin-herdr is a DTK frontend for herdr terminal
-workspace manager.
+        <source>MuDi (牧笛) is a GUI frontend for the herdr terminal
+workspace manager for AI coding agents.
 herdr provides a terminal-based IDE experience with
 multi-pane workspaces, tabs, and AI agent integration.</source>
-        <translation>deepin-herdr 是 herdr 终端工作区管理器的
-DTK 前端。
+        <translation>MuDi（牧笛）是面向 AI 编码 agent 的 herdr 终端
+工作区管理器图形前端。
 herdr 提供基于终端的 IDE 体验，包含
 多窗格工作区、标签页和 AI 代理集成。</translation>
     </message>

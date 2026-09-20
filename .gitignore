@@ -4,12 +4,12 @@ CMakeCache.txt
 Makefile
 *.cmake
 !CMakeLists.txt
-/deepin-herdr
+/mudi
 build/
 debian/.debhelper/
 debian/debhelper-build-stamp
-debian/deepin-herdr.substvars
-debian/deepin-herdr/
+debian/mudi.substvars
+debian/mudi/
 debian/files
 debian/tmp/
 *.dsc

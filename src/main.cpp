@@ -16,7 +16,7 @@ DWIDGET_USE_NAMESPACE
 static void messageHandler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg) {
     Q_UNUSED(ctx)
     if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) {
-        fprintf(stderr, "[deepin-herdr] %s\n", qPrintable(msg));
+        fprintf(stderr, "[mudi] %s\n", qPrintable(msg));
     }
 }
 
@@ -30,11 +30,11 @@ int main(int argc, char *argv[]) {
     if (Platform::useDtk()) {
         auto *dtkApp = new DApplication(argc, argv);
         dtkApp->loadTranslator();
-        dtkApp->setProductIcon(QIcon::fromTheme("deepin-herdr"));
+        dtkApp->setProductIcon(QIcon::fromTheme("mudi"));
         dtkApp->setApplicationDescription(
             QApplication::translate("main",
-                "deepin-herdr is a DTK frontend for herdr terminal\n"
-                "workspace manager.\n"
+                "MuDi (牧笛) is a GUI frontend for the herdr terminal\n"
+                "workspace manager for AI coding agents.\n"
                 "herdr provides a terminal-based IDE experience with\n"
                 "multi-pane workspaces, tabs, and AI agent integration."));
         app = dtkApp;
@@ -45,14 +45,16 @@ int main(int argc, char *argv[]) {
     QApplication *app = new QApplication(argc, argv);
 #endif
 
-    app->setApplicationName("deepin-herdr");
-    app->setApplicationDisplayName("deepin-herdr");
-    app->setOrganizationName("deepin");
+    app->setApplicationName("mudi");
+    app->setApplicationDisplayName("MuDi");
+    app->setOrganizationName("mudi");
     if (!Platform::useDtk()) {
         // DApplication::loadTranslator covers the DTK flavor
         Platform::loadTranslations(app);
     }
     app->setApplicationVersion(APP_VERSION);
+    // import pre-rename settings before anything reads them
+    Platform::migrateLegacySettings();
 
     AppCore *core = new AppCore(app);
     QMainWindow *window = createMainWindow(core);

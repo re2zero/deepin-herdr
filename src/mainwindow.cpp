@@ -16,7 +16,7 @@ namespace {
 // Registers shared wiring that both shells need before init().
 void setupShell(QMainWindow *window, AppCore *core)
 {
-    window->setWindowIcon(QIcon::fromTheme(QStringLiteral("deepin-herdr")));
+    window->setWindowIcon(QIcon::fromTheme(QStringLiteral("mudi")));
     window->resize(1200, 800);
 
     window->connect(core, &AppCore::closeRequested, window, &QMainWindow::close);
@@ -37,7 +37,7 @@ class DtkMainWindow final : public DMainWindow {
 public:
     explicit DtkMainWindow(AppCore *core)
     {
-        setWindowIcon(QIcon::fromTheme(QStringLiteral("deepin-herdr")));
+        setWindowIcon(QIcon::fromTheme(QStringLiteral("mudi")));
         resize(1200, 800);
         connect(core, &AppCore::closeRequested, this, &DMainWindow::close);
         core->setTranslucencyHandler([this](bool on) {

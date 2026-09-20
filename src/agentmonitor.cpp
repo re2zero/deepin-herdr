@@ -1,4 +1,5 @@
 #include "agentmonitor.h"
+#include "platform.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -105,7 +106,7 @@ void AgentMonitor::handlePollFinished()
         });
     }
 
-    QSettings settings("deepin-herdr", "deepin-herdr");
+    QSettings settings = Platform::appSettings();
     const bool enabled = settings.value("agentNotify", true).toBool();
     if (!enabled || !m_primed) {
         // disabled or first successful poll: just prime silently, never signal

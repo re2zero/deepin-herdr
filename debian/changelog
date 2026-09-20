@@ -1,3 +1,24 @@
+mudi (0.2.2) unstable; urgency=medium
+
+  * Rename the project to MuDi (牧笛): binary, desktop entry, icon,
+    settings store and release assets are now "mudi"; an existing
+    deepin-herdr settings store is imported on first run.
+  * Fix the frontend failing to enter herdr when relaunched while the
+    server is still running: the client was spawned before the window
+    was laid out and exited on a zero-sized terminal grid; the spawn
+    is now deferred until after show().
+  * Add in-app updater (mirror racing, SHA-256 verification) with a
+    progress banner and a paginated settings dialog.
+  * Add agent state desktop notifications (AgentMonitor).
+  * Use DTK only on deepin/UOS and a generic Qt window shell elsewhere;
+    vendor terminalwidget sources for all-platform builds.
+  * Auto-restart the herdr server after stop and attach reliably, with
+    lifecycle banners and a fallback plain shell.
+  * Add CI build matrix (linux x86_64/aarch64, macOS) with optional
+    libchardet.
+
+ -- re2zero <yangwu@uniontech.com>  Mon, 21 Sep 2026 11:30:00 +0800
+
 deepin-herdr (0.2.1) unstable; urgency=medium
 
   * Integrate extended theme menu into DTK titlebar menu.

@@ -26,10 +26,40 @@ DGUI_USE_NAMESPACE
 
 namespace Platform {
 
+QSettings appSettings()
+{
+    return QSettings(QStringLiteral("mudi"), QStringLiteral("mudi"));
+}
+
+void migrateLegacySettings()
+{
+    // Carry the pre-rename deepin-herdr store (themes, mirrors, skipped
+    // versions, fonts…) over to the mudi store exactly once.
+    QSettings legacy(QStringLiteral("deepin-herdr"), QStringLiteral("deepin-herdr"));
+    if (legacy.allKeys().isEmpty()) {
+        return;
+    }
+    QSettings current = appSettings();
+    if (!current.allKeys().isEmpty()) {
+        return;
+    }
+    const QStringList keys = legacy.allKeys();
+    for (const QString &key : keys) {
+        current.setValue(key, legacy.value(key));
+    }
+    current.sync();
+    if (current.status() == QSettings::NoError) {
+        const QString fileName = legacy.fileName();
+        legacy.clear();
+        legacy.sync();
+        QFile::remove(fileName);
+    }
+}
+
 bool useDtk()
 {
     static const bool cached = []() {
-        const QByteArray force = qgetenv("DEEPIN_HERDR_UI");
+        const QByteArray force = qgetenv("MUDI_UI");
         if (force == "generic") {
             return false;
         }
@@ -80,14 +110,14 @@ void loadTranslations(QApplication *app)
     // generic flavor: install our own .qm files
     const QString locale = QLocale::system().name();
     const QStringList dirs = {
-        QCoreApplication::applicationDirPath() + QStringLiteral("/../share/deepin-herdr/translations"),
-        QStringLiteral("/usr/share/deepin-herdr/translations"),
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../share/mudi/translations"),
+        QStringLiteral("/usr/share/mudi/translations"),
         QStringLiteral("translations"),
     };
     for (const QString &dir : dirs) {
         for (const QString &name : {locale, locale.left(2)}) {
             auto *translator = new QTranslator(app);
-            if (translator->load(QStringLiteral("deepin-herdr_") + name, dir)) {
+            if (translator->load(QStringLiteral("mudi_") + name, dir)) {
                 app->installTranslator(translator);
                 return;
             }

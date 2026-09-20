@@ -1,5 +1,5 @@
-#ifndef HERDR_VERSION_H
-#define HERDR_VERSION_H
+#ifndef MUDI_VERSION_H
+#define MUDI_VERSION_H
 
 #define APP_VERSION "${APP_VERSION}"
 

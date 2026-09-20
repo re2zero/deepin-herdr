@@ -37,14 +37,13 @@ DGUI_USE_NAMESPACE
 #endif
 
 static const char *HERDR_BINARY = "herdr";
-static const char *HERDR_CONFIG_DIR = "herdr";
 
 // herdr upstream publishes single binaries per platform on GitHub releases
 static const char *HERDR_API_PATH = "repos/herdrdev/herdr/releases/latest";
 static const char *HERDR_ASSET_PREFIX = "herdr";
 // the app itself
-static const char *APP_API_PATH = "repos/re2zero/deepin-herdr/releases/latest";
-static const char *APP_ASSET_PREFIX = "deepin-herdr";
+static const char *APP_API_PATH = "repos/re2zero/mudi/releases/latest";
+static const char *APP_ASSET_PREFIX = "mudi";
 
 namespace {
 constexpr int BANNER_HERDR = 0;
@@ -255,10 +254,10 @@ void AppCore::initUpdateSystem()
     m_herdrUpdater = new ReleaseUpdater(HERDR_API_PATH, HERDR_ASSET_PREFIX,
                                         HERDR_BINARY, this);
     m_appUpdater = new ReleaseUpdater(APP_API_PATH, APP_ASSET_PREFIX,
-                                      "deepin-herdr", this);
+                                      "mudi", this);
 
     // Mirror preferences apply to both updaters
-    QSettings settings("deepin-herdr", "deepin-herdr");
+    QSettings settings = Platform::appSettings();
     const QString mode = settings.value("mirrorMode", "auto").toString();
     ReleaseUpdater::MirrorMode m = ReleaseUpdater::MirrorMode::Auto;
     if (mode == "direct") m = ReleaseUpdater::MirrorMode::DirectFirst;
@@ -279,7 +278,7 @@ void AppCore::initUpdateSystem()
             || ReleaseUpdater::compareVersions(release.version, m_herdrVersion) <= 0) {
             return;
         }
-        QSettings store("deepin-herdr", "deepin-herdr");
+        QSettings store = Platform::appSettings();
         if (store.value("skippedHerdrVersion").toString() == release.version) {
             return;
         }
@@ -296,12 +295,12 @@ void AppCore::initUpdateSystem()
         if (ReleaseUpdater::compareVersions(release.version, APP_VERSION) <= 0) {
             return;
         }
-        QSettings store("deepin-herdr", "deepin-herdr");
+        QSettings store = Platform::appSettings();
         if (store.value("skippedAppVersion").toString() == release.version) {
             return;
         }
         queueBanner(BANNER_APP,
-                    tr("deepin-herdr %1 is available").arg(release.version),
+                    tr("MuDi %1 is available").arg(release.version),
                     tr("View"), release);
     });
 
@@ -347,7 +346,7 @@ void AppCore::initUpdateSystem()
     });
 
     connect(m_banner, &UpdateBanner::skipTriggered, this, [this]() {
-        QSettings store("deepin-herdr", "deepin-herdr");
+        QSettings store = Platform::appSettings();
         const QString key = (m_currentBanner.kind == BANNER_HERDR)
             ? "skippedHerdrVersion" : "skippedAppVersion";
         store.setValue(key, m_currentBanner.release.version);
@@ -363,7 +362,7 @@ void AppCore::initUpdateSystem()
 
 void AppCore::autoCheckUpdates()
 {
-    QSettings settings("deepin-herdr", "deepin-herdr");
+    QSettings settings = Platform::appSettings();
     if (!settings.value("autoCheckUpdates", true).toBool()) {
         return;
     }
@@ -563,11 +562,11 @@ void AppCore::onAgentAttention(const QString &paneId, const QString &agent,
         return;
     }
     QVariantMap hints;
-    hints.insert(QStringLiteral("desktop-entry"), QStringLiteral("deepin-herdr"));
+    hints.insert(QStringLiteral("desktop-entry"), QStringLiteral("mudi"));
     notifications.asyncCallWithArgumentList("Notify", {
-        QVariant(QStringLiteral("deepin-herdr")),
+        QVariant(QStringLiteral("MuDi")),
         QVariant::fromValue(static_cast<uint>(0)),
-        QVariant(QStringLiteral("deepin-herdr")),
+        QVariant(QStringLiteral("mudi")),
         QVariant(tr("%1 is %2").arg(agent, stateText)),
         QVariant(body),
         QStringList(),
@@ -590,7 +589,11 @@ void AppCore::ensureServerRunning(const QString &socketPath)
                 replaceServerBanner(BANNER_CONNECT_SERVER, tr("herdr server is ready."),
                                     tr("Connect"));
             } else {
-                launchClient();
+                // The probe can succeed synchronously from init(), before
+                // the window is even shown; spawning then hands the client
+                // a 0x0 pty grid and it exits on the spot. Defer to the
+                // event loop, which only starts after show().
+                QTimer::singleShot(0, this, &AppCore::launchClient);
             }
             return;
         }
@@ -732,7 +735,7 @@ void AppCore::handleOSC52Clipboard(char target, const QString &base64Data)
 void AppCore::switchThemeAction(QAction *action)
 {
     QString themeKey = "theme";
-    QSettings settings("deepin-herdr", "deepin-herdr");
+    QSettings settings = Platform::appSettings();
 
     if (action == m_lightThemeAction) {
         // Light theme: UI palette and terminal both go light
@@ -819,7 +822,7 @@ void AppCore::applyThemeByKey(const QString &key)
 
 void AppCore::restoreTerminalSettings()
 {
-    QSettings settings("deepin-herdr", "deepin-herdr");
+    QSettings settings = Platform::appSettings();
 
     // Restore font family
     QString fontFamily = settings.value("fontFamily").toString();
@@ -886,7 +889,7 @@ void AppCore::openSettings()
 
 void AppCore::onSettingsChanged(const SettingsDialog::TerminalSettings &settings)
 {
-    QSettings store("deepin-herdr", "deepin-herdr");
+    QSettings store = Platform::appSettings();
     store.setValue("fontFamily", settings.fontFamily);
     store.setValue("fontSize", settings.fontSize);
     store.setValue("cursorShape", settings.cursorShape);
@@ -912,7 +915,7 @@ void AppCore::onTransparencyChanged(qreal opacity)
     if (m_translucencyHandler) {
         m_translucencyHandler(opacity < 1.0);
     }
-    QSettings store("deepin-herdr", "deepin-herdr");
+    QSettings store = Platform::appSettings();
     store.setValue("terminalOpacity", opacity);
 }
 

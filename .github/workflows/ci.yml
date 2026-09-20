@@ -33,7 +33,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # asset names expected by the in-app update checker
-      ASSET: deepin-herdr-${{ matrix.name }}
+      ASSET: mudi-${{ matrix.name }}
 
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +71,7 @@ jobs:
           cmake --install build --prefix stage
           mkdir -p stage/share/terminalwidget6 2>/dev/null || true
           tar -C stage -czf "$ASSET.tar.gz" .
-          cp build/deepin-herdr "$ASSET"
+          cp build/mudi "$ASSET"
           ls -la "$ASSET" "$ASSET.tar.gz"
 
       - name: Upload build artifact
@@ -101,5 +101,5 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --generate-notes
-          find artifacts -type f \( -name 'deepin-herdr-*' -o -name '*.tar.gz' \) \
+          find artifacts -type f \( -name 'mudi-*' -o -name '*.tar.gz' \) \
             ! -name '*.tar.gz.*' -print0 | xargs -0 gh release upload "$TAG" --clobber

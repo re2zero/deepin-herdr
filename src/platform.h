@@ -2,6 +2,7 @@
 #define PLATFORM_H
 
 #include <QApplication>
+#include <QSettings>
 #include <functional>
 
 class QWidget;
@@ -11,11 +12,19 @@ class QWidget;
 // DTK is only used when the binary was built with DTK support (CMake
 // HAVE_DTK) AND the running OS is deepin/UOS (/etc/os-release ID).
 // Everything else — other distros, Windows, macOS — uses the generic Qt
-// implementations. DEEPIN_HERDR_UI=dtk|generic overrides detection for
-// testing.
+// implementations. MUDI_UI=dtk|generic overrides detection for testing.
 namespace Platform {
 
 bool useDtk();
+
+// Central application configuration store (org/app "mudi"/"mudi").
+// All settings access goes through here so the store location has a
+// single source of truth.
+QSettings appSettings();
+
+// One-time import from the pre-rename deepin-herdr store (runs in
+// main() before anything reads settings).
+void migrateLegacySettings();
 
 // Application UI theme (menus, dialogs) — distinct from the terminal
 // color scheme. Light/Dark force the palette, Auto follows the system.

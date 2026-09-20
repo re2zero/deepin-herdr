@@ -1,4 +1,5 @@
 #include "updater.h"
+#include "platform.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -36,7 +37,7 @@ QNetworkRequest makeRequest(const QUrl &url)
     QNetworkRequest req(url);
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                      QNetworkRequest::NoLessSafeRedirectPolicy);
-    req.setHeader(QNetworkRequest::UserAgentHeader, "deepin-herdr-updater");
+    req.setHeader(QNetworkRequest::UserAgentHeader, "mudi-updater");
     req.setTransferTimeout(15000);
     return req;
 }
@@ -232,7 +233,7 @@ void ReleaseUpdater::resolveOrder(const QString &directUrl)
         return;
     }
 
-    QSettings settings("deepin-herdr", "deepin-herdr");
+    QSettings settings = Platform::appSettings();
     const QString cached = settings.value(MIRROR_CACHE_KEY).toString();
     if (!cached.isEmpty()) {
         QStringList ordered;
@@ -313,7 +314,7 @@ void ReleaseUpdater::resolveOrder(const QString &directUrl)
                         && code.isValid() && (code.toInt() == 200 || code.toInt() == 206);
                     if (httpOk) {
                         *done = true;
-                        QSettings settings("deepin-herdr", "deepin-herdr");
+                        QSettings settings = Platform::appSettings();
                         settings.setValue(MIRROR_CACHE_KEY, probe.prefix);
 
                         QStringList ordered;
