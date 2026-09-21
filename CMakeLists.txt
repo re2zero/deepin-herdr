@@ -98,7 +98,6 @@ set(SOURCES
     src/updater.cpp
     src/agentmonitor.cpp
     src/tray.cpp
-    src/statusstrip.cpp
 )
 
 set(HEADERS
@@ -110,7 +109,6 @@ set(HEADERS
     src/updater.h
     src/agentmonitor.h
     src/tray.h
-    src/statusstrip.h
 )
 
 # embedded logo: tray icon fallback when the hicolor theme icon is not
