@@ -26,10 +26,10 @@ static constexpr const char *THEME_NINE_NAME  = "Ura";
 static constexpr const char *THEME_TEN_NAME   = "One light";
 
 class AgentMonitor;
-class AgentStatusStrip;
 class QEvent;
 class QMenu;
 class QAction;
+class QProcess;
 class QTermWidget;
 class TrayIcon;
 class UpdateBanner;
@@ -55,6 +55,22 @@ public:
     ReleaseUpdater *appUpdater() const { return m_appUpdater; }
     QString herdrVersion() const { return m_herdrVersion; }
 
+    // parsed snapshot of the periodic `herdr status` probe
+    struct ServerStatus {
+        bool known = false;             // output had a parseable server section
+        bool running = false;
+        QString version;                // empty when the server is not running
+        bool protocolCompatible = true; // server.private_protocol_compatible
+        bool restartNeeded = false;     // update.restart_needed
+        bool binaryStale = false;       // update.server_binary_stale
+    };
+
+    ServerStatus serverStatus() const { return m_serverStatus; }
+
+    // destructive: confirm dialog, then stop the server (kills every
+    // pane's processes) and relaunch it through the launch retry chain
+    void requestServerRestart();
+
     // shell hook: toggling terminal opacity below 1 requests a
     // translucent window (DTK: setTranslucentBackground, generic:
     // WA_TranslucentBackground); must be registered before init()
@@ -62,6 +78,7 @@ public:
 
 signals:
     void closeRequested();
+    void serverStatusChanged();
 
 private slots:
     void handleOSC52Clipboard(char target, const QString &base64Data);
@@ -92,6 +109,13 @@ private:
     void checkHerdrAndStart();
     void runFirstRunInstall();
     void ensureServerRunning(const QString &socketPath);
+    void startServerStatusProbe();
+    void pollServerStatus();
+    void applyServerStatus(const ServerStatus &next);
+    void notifyServerRestartRecommended();
+    void restartServerConfirmed();
+    void waitServerStopped();
+    static ServerStatus parseHerdrStatus(const QString &output);
     void startFallbackShell();
     void startServerWatch();
     void launchClient();
@@ -116,7 +140,6 @@ private:
 
     QWidget *m_container = nullptr;
     QTermWidget *m_terminal = nullptr;
-    AgentStatusStrip *m_statusStrip = nullptr;
     QTimer *m_launchTimer;
     QTimer *m_serverWatchTimer = nullptr;
     int m_launchAttempts;
@@ -138,6 +161,15 @@ private:
     AgentMonitor *m_agentMonitor = nullptr;
     TrayIcon *m_tray = nullptr;
     QString m_herdrVersion;
+    // low-frequency `herdr status` probe (server lifecycle, M7)
+    QTimer *m_statusProbeTimer = nullptr;
+    QProcess *m_statusProbe = nullptr;
+    ServerStatus m_serverStatus;
+    bool m_restartNoticeShown = false;
+    // true between "server stop" and the relaunched client: the old
+    // terminal session's finished() must not quit the app then
+    bool m_restartingServer = false;
+    int m_stopWaitPolls = 0;
     // in-flight desktop notifications: notification id -> pane to focus
     QHash<uint, QString> m_notificationPanes;
     QVector<BannerRequest> m_bannerQueue;

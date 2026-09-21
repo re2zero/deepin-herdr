@@ -3,7 +3,6 @@
 #include "updatebanner.h"
 #include "agentmonitor.h"
 #include "platform.h"
-#include "statusstrip.h"
 #include "tray.h"
 #include "version.h"
 
@@ -59,11 +58,15 @@ constexpr int BANNER_APP = 1;
 constexpr int BANNER_CONNECTING_SERVER = 2;
 constexpr int BANNER_CONNECT_SERVER = 3;
 constexpr int BANNER_RETRY_SERVER = 4;
+constexpr int BANNER_RESTART_SERVER = 5;
 constexpr int AUTO_CHECK_DELAY_MS = 4000;
 // server restore can restart every pane's agent process; 13 workspaces
 // easily take over a minute, so the launch window is generous
 constexpr int LAUNCH_MAX_ATTEMPTS = 120;      // x 500ms = 60s
 constexpr int SERVER_WATCH_INTERVAL_MS = 2000;
+constexpr int SERVER_STATUS_PROBE_INTERVAL_MS = 30000;
+// wait for the stopped server to release its socket: 30 x 500ms = 15s
+constexpr int STOP_WAIT_MAX_POLLS = 30;
 const char *CLIENT_SOCKET_NAME = "herdr-client.sock";
 
 QString serverSocketPath()
@@ -124,13 +127,6 @@ void AppCore::initContent()
     m_banner = new UpdateBanner(m_container);
     layout->addWidget(m_banner);
 
-    // agent status strip (M6c): between banner and terminal, hidden
-    // until a poll finds agents; a capsule click focuses the pane
-    m_statusStrip = new AgentStatusStrip(m_container);
-    layout->addWidget(m_statusStrip);
-    connect(m_statusStrip, &AgentStatusStrip::paneClicked,
-            this, &AppCore::focusPane);
-
     m_terminal = new QTermWidget(0, m_container);
     layout->addWidget(m_terminal);
     m_originalFont = m_terminal->getTerminalFont();
@@ -184,7 +180,14 @@ void AppCore::initContent()
                 this, SLOT(handleOSC52Clipboard(char,QString)));
     }
 
-    connect(m_terminal, &QTermWidget::finished, this, &AppCore::closeRequested);
+    // A server restart intentionally kills the old herdr client; the
+    // restart chain relaunches it, so that exit must not quit the app.
+    connect(m_terminal, &QTermWidget::finished, this, [this]() {
+        if (m_restartingServer) {
+            return;
+        }
+        emit closeRequested();
+    });
 }
 
 // The theme menu is shell-independent; shells attach it to the DTK
@@ -337,6 +340,10 @@ void AppCore::initUpdateSystem()
             m_launchAttempts = 0;
             m_staleSocketRemoved = false;
             checkHerdrAndStart();
+        } else if (m_currentBanner.kind == BANNER_RESTART_SERVER) {
+            m_banner->hide();
+            showNextBanner();
+            requestServerRestart();
         } else {
             QDesktopServices::openUrl(QUrl(m_appUpdater->releasesPageUrl()));
             m_banner->hide();
@@ -356,7 +363,13 @@ void AppCore::initUpdateSystem()
             return; // install was started elsewhere (first run / settings page)
         }
         if (ok) {
-            m_banner->showDone(tr("herdr updated. Restart the herdr server to apply."));
+            // the freshly installed binary can only serve the new
+            // protocol after the old server is gone — offer the restart
+            // right away instead of the dead-end "Got it"
+            replaceServerBanner(BANNER_RESTART_SERVER,
+                tr("herdr updated to v%1. Restart the herdr server to apply.")
+                    .arg(m_currentBanner.release.version),
+                tr("Restart server"));
         } else {
             m_banner->showError(tr("herdr update failed: %1").arg(error));
         }
@@ -420,7 +433,8 @@ void AppCore::replaceServerBanner(int kind, const QString &title, const QString 
                             [](const BannerRequest &r) {
                                 return r.kind == BANNER_CONNECTING_SERVER
                                     || r.kind == BANNER_CONNECT_SERVER
-                                    || r.kind == BANNER_RETRY_SERVER;
+                                    || r.kind == BANNER_RETRY_SERVER
+                                    || r.kind == BANNER_RESTART_SERVER;
                             }),
                         m_bannerQueue.end());
     m_currentBanner.kind = kind;
@@ -448,6 +462,7 @@ void AppCore::checkHerdrAndStart()
     if (!findHerdrBinary().isEmpty()) {
         detectHerdrVersion();
         startAgentMonitor();
+        startServerStatusProbe();
         ensureServerRunning(serverSocketPath());
         return;
     }
@@ -535,6 +550,208 @@ void AppCore::detectHerdrVersion()
     });
 }
 
+// Low-frequency server lifecycle probe (M7): `herdr status` reports
+// whether the server runs, its version, protocol compatibility and
+// whether an update awaits a server restart. Line-based YAML parsing —
+// deliberately no dependency.
+void AppCore::startServerStatusProbe()
+{
+    if (!m_statusProbeTimer) {
+        m_statusProbeTimer = new QTimer(this);
+        m_statusProbeTimer->setInterval(SERVER_STATUS_PROBE_INTERVAL_MS);
+        connect(m_statusProbeTimer, &QTimer::timeout, this, &AppCore::pollServerStatus);
+    }
+    pollServerStatus();
+    m_statusProbeTimer->start();
+}
+
+void AppCore::pollServerStatus()
+{
+    if (m_statusProbe) {
+        return; // previous probe still in flight
+    }
+    const QString binary = findHerdrBinary();
+    if (binary.isEmpty()) {
+        ServerStatus unknown;
+        applyServerStatus(unknown);
+        return;
+    }
+    m_statusProbe = new QProcess(this);
+    connect(m_statusProbe, &QProcess::errorOccurred, this, [this]() {
+        m_statusProbe->deleteLater();
+        m_statusProbe = nullptr;
+    });
+    connect(m_statusProbe, &QProcess::finished, this, [this](int, QProcess::ExitStatus) {
+        const QString output = QString::fromUtf8(m_statusProbe->readAllStandardOutput());
+        m_statusProbe->deleteLater();
+        m_statusProbe = nullptr;
+        applyServerStatus(parseHerdrStatus(output));
+    });
+    m_statusProbe->start(binary, {"status"});
+}
+
+// static
+AppCore::ServerStatus AppCore::parseHerdrStatus(const QString &output)
+{
+    enum Section { None, Server, Update };
+    Section section = None;
+    ServerStatus status;
+    QString serverStatusValue;
+
+    const QStringList lines = output.split(QLatin1Char('\n'));
+    for (QString line : lines) {
+        line = line.trimmed();
+        if (line == QLatin1String("server:")) {
+            section = Server;
+            status.known = true;
+            continue;
+        }
+        if (line == QLatin1String("update:")) {
+            section = Update;
+            continue;
+        }
+        const int colon = line.indexOf(QLatin1Char(':'));
+        if (colon <= 0) {
+            continue;
+        }
+        const QString key = line.left(colon).trimmed();
+        const QString value = line.mid(colon + 1).trimmed();
+        if (section == Server) {
+            if (key == QLatin1String("status")) serverStatusValue = value;
+            else if (key == QLatin1String("version")) status.version = value;
+            else if (key == QLatin1String("private_protocol_compatible"))
+                status.protocolCompatible = (value == QLatin1String("yes"));
+        } else if (section == Update) {
+            if (key == QLatin1String("restart_needed"))
+                status.restartNeeded = (value == QLatin1String("yes"));
+            else if (key == QLatin1String("server_binary_stale"))
+                status.binaryStale = (value == QLatin1String("yes"));
+        }
+    }
+    status.running = (serverStatusValue == QLatin1String("running"));
+    return status;
+}
+
+void AppCore::applyServerStatus(const ServerStatus &next)
+{
+    m_serverStatus = next;
+    emit serverStatusChanged();
+
+    if (!next.known) {
+        return; // unparseable probe (binary busy/gone): not guidance-worthy
+    }
+    // A not-running server needs no restart guidance; a running one that
+    // lags the installed herdr does — raised level-based on the first
+    // unhealthy poll (the stale-at-startup case must banner immediately),
+    // deduplicated by the shown flag, re-armed by any healthy poll.
+    if (!next.running || (next.protocolCompatible
+            && !next.restartNeeded && !next.binaryStale)) {
+        m_restartNoticeShown = false;
+        return;
+    }
+    notifyServerRestartRecommended();
+}
+
+// Edge-triggered guidance: the server runs but lags the installed herdr
+// (protocol mismatch or an update waiting for a restart). Never raised
+// while an install is downloading — the install-completion handler takes
+// over when that one lands.
+void AppCore::notifyServerRestartRecommended()
+{
+    if (m_restartNoticeShown || m_herdrUpdater->isDownloading()) {
+        return;
+    }
+    m_restartNoticeShown = true;
+
+    QString why;
+    if (!m_serverStatus.protocolCompatible) {
+        why = tr("The running herdr server speaks a different protocol than the installed herdr.");
+    } else {
+        why = tr("The running herdr server is older than the installed herdr.");
+    }
+    replaceServerBanner(BANNER_RESTART_SERVER,
+        tr("%1 Restart the herdr server to apply.").arg(why),
+        tr("Restart server"));
+}
+
+// Destructive restart, user-confirmed: stopping the server terminates
+// every process in every workspace. Same layout discipline as the tray
+// quit dialog — dangerous verb alone on the far left, safe default on
+// the right, consequences spelled out in plain text.
+void AppCore::requestServerRestart()
+{
+    QDialog dialog(m_container->window());
+    dialog.setWindowTitle(tr("Restart herdr server"));
+    auto *v = new QVBoxLayout(&dialog);
+    v->setContentsMargins(24, 20, 24, 20);
+    v->setSpacing(12);
+
+    auto *mainLabel = new QLabel(
+        tr("The herdr server will be stopped and started again."), &dialog);
+    auto *descLabel = new QLabel(
+        tr("All processes in your workspaces (including running agents) will be terminated.\n"
+           "The server comes back with the installed herdr version and MuDi reconnects automatically."),
+        &dialog);
+    descLabel->setWordWrap(true);
+    v->addWidget(mainLabel);
+    v->addWidget(descLabel);
+    v->addSpacing(4);
+
+    auto *buttons = new QHBoxLayout;
+    buttons->setSpacing(12);
+    auto *restartBtn = new QPushButton(tr("Restart server"), &dialog);
+    // color-only rule: pseudo-state rules would switch the button to
+    // stylesheet painting and mangle focus rendering (see tray quit)
+    restartBtn->setStyleSheet(QStringLiteral("color: #F54A45;"));
+    auto *cancelBtn = new QPushButton(tr("Cancel"), &dialog);
+    cancelBtn->setDefault(true);
+    buttons->addWidget(restartBtn);
+    buttons->addStretch();
+    buttons->addWidget(cancelBtn);
+    v->addLayout(buttons);
+
+    connect(restartBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
+    // Esc and the window close button land on reject(): no action
+    cancelBtn->setFocus();
+
+    if (dialog.exec() == QDialog::Accepted) {
+        restartServerConfirmed();
+    }
+}
+
+void AppCore::restartServerConfirmed()
+{
+    const QString binary = findHerdrBinary();
+    if (binary.isEmpty()) {
+        return;
+    }
+    m_restartNoticeShown = false; // re-arm: the probe re-raises if it must
+    m_restartingServer = true;
+    QProcess::startDetached(binary, {"server", "stop"});
+    replaceServerBanner(BANNER_CONNECTING_SERVER, tr("Restarting herdr server…"));
+    m_stopWaitPolls = STOP_WAIT_MAX_POLLS;
+    waitServerStopped();
+}
+
+// Wait for the dying server to release its socket, then run the normal
+// launch chain: it sees no socket, starts the new server and relaunches
+// the client in the terminal. If the socket lingers past the window the
+// ensureServerRunning stale-socket cleanup takes over.
+void AppCore::waitServerStopped()
+{
+    const QString socketPath = serverSocketPath();
+    if (QFileInfo::exists(socketPath) && --m_stopWaitPolls > 0) {
+        QTimer::singleShot(500, this, &AppCore::waitServerStopped);
+        return;
+    }
+    if (QFileInfo::exists(socketPath)) {
+        qWarning() << "herdr server socket still present after stop window:" << socketPath;
+    }
+    m_launchAttempts = 0;
+    m_staleSocketRemoved = false;
+    checkHerdrAndStart();
+}
+
 // Desktop notifications for herdr agent state transitions (blocked /
 // done / optionally idle). Cheap JSON poll through the herdr CLI.
 void AppCore::startAgentMonitor()
@@ -546,10 +763,6 @@ void AppCore::startAgentMonitor()
         if (m_tray) {
             connect(m_agentMonitor, &AgentMonitor::agentsChanged,
                     m_tray, &TrayIcon::refreshAgents);
-        }
-        if (m_statusStrip) {
-            connect(m_agentMonitor, &AgentMonitor::agentsChanged,
-                    m_statusStrip, &AgentStatusStrip::refreshAgents);
         }
     }
     m_agentMonitor->start();
@@ -592,11 +805,14 @@ void AppCore::onAgentAttention(const QString &paneId, const QString &agent,
     const QStringList actions = {
         QStringLiteral("default"), tr("View"),
     };
+    // same naming as the status strip: "project (agent)" so identical
+    // agent names stay distinguishable across workspaces
+    const QString who = AgentMonitor::displayName(agent, cwd);
     QDBusPendingReply<uint> reply = notifications.asyncCallWithArgumentList("Notify", {
         QVariant(QStringLiteral("MuDi")),
         QVariant::fromValue(static_cast<uint>(0)),
         QVariant(QStringLiteral("mudi")),
-        QVariant(tr("%1 is %2").arg(agent, stateText)),
+        QVariant(tr("%1 is %2").arg(who.isEmpty() ? paneId : who, stateText)),
         QVariant(body),
         QVariant(actions),
         hints,
@@ -794,6 +1010,7 @@ void AppCore::ensureServerRunning(const QString &socketPath)
             if (m_fallbackShellStarted) {
                 // the server came up while the user was in the fallback shell
                 m_serverWatchTimer->stop();
+                m_restartingServer = false; // the teletype shell never died
                 replaceServerBanner(BANNER_CONNECT_SERVER, tr("herdr server is ready."),
                                     tr("Connect"));
             } else {
@@ -839,6 +1056,7 @@ void AppCore::ensureServerRunning(const QString &socketPath)
 void AppCore::startFallbackShell()
 {
     m_fallbackShellStarted = true;
+    m_restartingServer = false;
     m_terminal->startTerminalTeletype();
     replaceServerBanner(BANNER_RETRY_SERVER,
                         tr("herdr server did not come up — a plain shell is available."),
@@ -867,8 +1085,12 @@ void AppCore::startServerWatch()
 void AppCore::launchClient()
 {
     m_launchTimer->stop();
-    m_banner->hide();
-    showNextBanner();
+    // clear only the connecting notice this launch owns: a server-restart
+    // guidance raised while the launch was settling must survive it
+    if (m_currentBanner.kind == BANNER_CONNECTING_SERVER) {
+        m_banner->hide();
+        showNextBanner();
+    }
 
     qunsetenv("HERDR_ENV");
     qunsetenv("HERDR_PANE_ID");
@@ -882,6 +1104,9 @@ void AppCore::launchClient()
     m_terminal->setShellProgram(binary);
     m_terminal->setArgs({"client"});
     m_terminal->startShellProgram();
+    // the (re)launched client owns the terminal again; a future exit is
+    // a real one
+    m_restartingServer = false;
 }
 
 QString AppCore::findHerdrBinary() const

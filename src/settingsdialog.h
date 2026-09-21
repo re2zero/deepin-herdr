@@ -73,6 +73,8 @@ private:
     QLabel *m_opacityValue;
 
     // herdr page
+    QLabel *m_serverStatusLabel;
+    QPushButton *m_serverRestartButton;
     QLabel *m_herdrVersionLabel;
     QLabel *m_herdrStatus;
     QComboBox *m_mirrorCombo;

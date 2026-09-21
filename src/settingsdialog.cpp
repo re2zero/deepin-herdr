@@ -374,6 +374,54 @@ QWidget *SettingsDialog::createHerdrPage()
 
     RowList rows(v);
 
+    // Server status area (M7): live view of the herdr server lifecycle,
+    // refreshed by AppCore's `herdr status` probe; red when the server
+    // lags the installed binary
+    m_serverStatusLabel = makeStatusLabel();
+    m_serverStatusLabel->setObjectName(QStringLiteral("serverStatusLabel"));
+    rows.add(makeFullRow(m_serverStatusLabel));
+
+    m_serverRestartButton = new QPushButton(QObject::tr("Restart server"), page);
+    auto *serverButtons = new QWidget(page);
+    auto *serverLayout = new QHBoxLayout(serverButtons);
+    serverLayout->setContentsMargins(0, 0, 0, 0);
+    serverLayout->setSpacing(8);
+    serverLayout->addWidget(m_serverRestartButton);
+    serverLayout->addStretch();
+    rows.add(makeFullRow(serverButtons));
+
+    auto updateServerArea = [this]() {
+        const AppCore::ServerStatus st = m_core->serverStatus();
+        QString text;
+        bool problem = false;
+        if (!st.known) {
+            text = QObject::tr("Server status unknown");
+        } else if (!st.running) {
+            text = QObject::tr("Server not running");
+        } else {
+            text = st.version.isEmpty()
+                ? QObject::tr("Server running")
+                : QObject::tr("Server running · v%1").arg(st.version);
+            if (!st.protocolCompatible) {
+                text += QStringLiteral(" · ") + QObject::tr("protocol incompatible");
+                problem = true;
+            } else if (st.restartNeeded || st.binaryStale) {
+                text += QStringLiteral(" · ") + QObject::tr("restart needed to apply the update");
+                problem = true;
+            }
+        }
+        m_serverStatusLabel->setText(text);
+        // plain color rule on a label is safe; the stylesheet painting
+        // pitfall only bites pseudo-state rules on buttons
+        m_serverStatusLabel->setStyleSheet(problem
+            ? QStringLiteral("color: #F54A45;") : QString());
+    };
+    updateServerArea();
+    connect(m_core, &AppCore::serverStatusChanged, this, updateServerArea);
+    connect(m_serverRestartButton, &QPushButton::clicked, this, [this]() {
+        m_core->requestServerRestart();
+    });
+
     // Installed version
     m_herdrVersionLabel = new QLabel(page);
     const QString installed = m_core->herdrVersion();
