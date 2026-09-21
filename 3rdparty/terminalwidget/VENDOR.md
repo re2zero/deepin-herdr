@@ -69,4 +69,6 @@ git clone --depth 1 --branch <deepin-terminal-tag> https://github.com/linuxdeepi
 rm -rf 3rdparty/terminalwidget/lib
 cp -r /tmp/dt-src/3rdparty/terminalwidget/lib 3rdparty/terminalwidget/lib
 # re-apply the tools.cpp relocatable fallback (see git log of this file)
+# local patch: ProcessInfo.cpp getpwuid_r cast uses Linux-only __uid_t;
+# POSIX uid_t works on both Linux and macOS (macOS build fix, 2026-09-21)
 ```

@@ -54,7 +54,7 @@ jobs:
         run: |
           brew install qt pkg-config icu4c uchardet cmake
           echo "CMAKE_PREFIX_PATH=$(brew --prefix qt)" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix libffi)/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix uchardet)/lib/pkgconfig" >> "$GITHUB_ENV"
 
       - name: Configure
         run: >
