@@ -71,4 +71,6 @@ cp -r /tmp/dt-src/3rdparty/terminalwidget/lib 3rdparty/terminalwidget/lib
 # re-apply the tools.cpp relocatable fallback (see git log of this file)
 # local patch: ProcessInfo.cpp getpwuid_r cast uses Linux-only __uid_t;
 # POSIX uid_t works on both Linux and macOS (macOS build fix, 2026-09-21)
+# local patch: CMakeLists links iconv on APPLE (not in libSystem there);
+# static-library consumers fail at link time without it (2026-09-21)
 ```

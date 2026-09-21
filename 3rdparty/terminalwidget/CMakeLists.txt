@@ -142,6 +142,11 @@ target_link_libraries(${TERMINALWIDGET_LIBRARY_NAME}
 if(UNIX)
     target_link_libraries(${TERMINALWIDGET_LIBRARY_NAME} PRIVATE m)
 endif()
+# VENDOR: macOS keeps iconv out of libSystem; without this the final
+# link of any consumer of the static library fails on _iconv_open
+if(APPLE)
+    target_link_libraries(${TERMINALWIDGET_LIBRARY_NAME} PUBLIC iconv)
+endif()
 
 target_compile_definitions(${TERMINALWIDGET_LIBRARY_NAME}
     PRIVATE
