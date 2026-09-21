@@ -55,6 +55,10 @@ jobs:
           brew install qt pkg-config icu4c uchardet cmake
           echo "CMAKE_PREFIX_PATH=$(brew --prefix qt)" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix uchardet)/lib/pkgconfig" >> "$GITHUB_ENV"
+          # uchardet 0.0.8's pkg-config file points Cflags at
+          # <include>/uchardet while consumers include <uchardet/uchardet.h>;
+          # hand the include root to the compiler directly
+          echo "UCHARDET_FLAGS=-I$(brew --prefix uchardet)/include" >> "$GITHUB_ENV"
 
       - name: Configure
         run: >
@@ -62,6 +66,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -DDISABLE_DTK=${{ matrix.dtk }}
           ${CMAKE_PREFIX_PATH:+-DCMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH}
+          ${UCHARDET_FLAGS:+-DCMAKE_CXX_FLAGS=$UCHARDET_FLAGS}
 
       - name: Build
         run: cmake --build build --parallel
