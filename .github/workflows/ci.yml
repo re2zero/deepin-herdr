@@ -15,6 +15,8 @@ jobs:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
+      # no macos-x86_64: the macos-13 (Intel) runner image was retired
+      # on 2025-11-14; revisit with a universal build on macos-15
       matrix:
         include:
           - name: linux-x86_64
@@ -25,9 +27,6 @@ jobs:
             dtk: OFF
           - name: macos-aarch64
             os: macos-14
-            dtk: OFF
-          - name: macos-x86_64
-            os: macos-13
             dtk: OFF
 
     runs-on: ${{ matrix.os }}
