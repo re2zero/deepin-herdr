@@ -121,11 +121,11 @@ Windows ConPTY 移植、macOS 通知补齐（`agentmonitor` 现在 `!WIN && !MAC
 ```
 ## 5. 当前状态
 
-- 当前里程碑: M6 全部完成（6a=32d757f 通知导航；6b=f35b105 托盘常驻；6c 状态带本次提交）——牧羊人闭环就位；下一会话从 **M7 server 生命周期闭环** 开始
-- 最近提交: 见 git log（6c: feat: in-window agent status strip）
-- 断点/下一步: 无断点。M7 入口：①AppCore 增低频（30s）`herdr status` 探测（YAML 按行解析，勿引依赖），缓存 serverRunning/serverVersion/protocolCompatible；②SettingsDialog::createHerdrPage 顶部 server 状态区（运行状态/版本/协议兼容红字 + 「重启 server」按钮）；③herdr 更新安装完成后横幅 showNotice("herdr 已更新…", "重启 server")（仿 BANNER_RETRY 路由）→ 破坏性确认（说明会重启各 pane 进程）→ `herdr server stop` → 复用 ensureServerRunning 重试链；④protocol 不兼容（status 的 private_protocol_compatible: no 或 client 报 protocol_mismatch）走同一路径。验收：PATH shim 模拟 status 各分支（running/not running/incompatible）；真实流程等下次 herdr 更新时公子走一遍；自动化禁止对真实 server 执行 stop
-- 新坑与新决策: ①**QSystemTrayIcon 会破坏 quitOnLastWindowClosed**——托盘应用必须显式接管退出语义（关窗事件里二选一：hide 或 qApp->quit()）；②窗口恢复用 `setWindowState(state & ~Qt::WindowMinimized)`，showNormal() 会连带取消最大化；③无头测试关窗用 python-xlib 直发 WM_DELETE（kwin 对 xdotool windowclose/合成 Alt+F4 均不可靠），最大化用 _NET_WM_STATE ClientMessage；④TS 复数条目必须 `<message numerus="yes">`；⑤DTK 窗有伴生 X 窗，按名操作前用 `_NET_WM_WINDOW_TYPE_NORMAL` 筛真窗；⑥测试脚本跑前清理残留（pkill + 删 /tmp/.X11-unix/X<号> + 按启动日期杀堆积的 kglobalacceld/portal-dde）；⑦**QSS 伪态规则会毁掉按钮焦点渲染**——按钮个性化只写一条基础 color 规则，焦点高亮交给主题；⑧QHBoxLayout 里胶囊类控件要尾部 addStretch + sizePolicy(Maximum, Fixed)，否则被拉伸铺满
-- 待公子手动项: GitHub 仓库改名 re2zero/mudi（M8 前）；老 deepin-herdr 包卸载换装 mudi；M7 的真实流程验收待下次 herdr 更新时进行
+- 当前里程碑: **M7 已提交（eddc266）；状态带已按公子决策删除（47fb4fb）；命名迭代已提交（d65a2f5）；版本已升至 0.3.0（64b0d29，changelog 已开条目，本地 tag 待打/push）**。下一会话进入 **M8 在世发布**：README（一图流+是什么/为什么+安装+构建+名字故事，英文为主中文附段）→ 公子确认 GitHub 仓库已改名 re2zero/mudi → push tag v0.3.0 → CI 产 assets → 隔离机器验证自更新 404 变"已是最新"
+- 最近提交: 64b0d29 chore: bump version to 0.3.0；47fb4fb refactor: drop the in-window agent status strip；eddc266 feat: guided herdr server restarts after updates；d65a2f5 feat: label agents by project in tray entries
+- 断点/下一步: 无断点。M7 闭环（探测→横幅→确认→stop→原地重启 client）+「项目名 (agent)」命名（托盘/通知）+ 状态带移除全部落地并回归（6a 双壳/6b off+on+max/M7A 双壳全 ALL PASS，HEAD 全量重建零警告）。M8 入口见上；注意 M8 验收里「自更新检查返回已是最新」需要 release 真实存在后才能验证
+- 新坑与新决策: ①**冷启动竞态：探测横幅弹出后 500ms 内 launchClient 无条件 `m_banner->hide()` 会杀掉它**——横幅 hide 要判定归属（只 hide 自己 raise 的 kind）；②herdr status 未运行时输出 `status: not running` 且无 version/compatible 键，exit code 0，完全被动；③vendored terminalwidget 的 startShellProgram 只以 isRunning() 为闸，session finished 后可再次 run() 重启会话；④**开发机装过系统 mudi 包时 DTK 壳经 DApplication::loadTranslator 命中 /usr/share 旧 qm，新翻译显示英文**——构建树验证翻译要 MUDI_UI=generic + staging 安装跑；⑤xprop 在本机 Xvfb 读不到 _NET_WM_WINDOW_TYPE/WM_STATE，按名筛窗用 `xdotool getwindowname == "MuDi"` 精确匹配；⑥xdotool 合成 Tab 在模态对话框不可靠，破坏性确认按钮用 XTest 坐标点击；⑦`pkill -f` 模式匹配承载 shell 自杀（模式加 `[]` 转义）；⑧测试脚本补丁必须断言真打上（python str.replace 静默 no-op 两次害排查半小时）；⑨**rm 掉 .X<n>-lock 与 socket 文件 ≠ 释放显示号**——残留 Xvfb 进程仍占抽象命名空间 socket，新 Xvfb 报 "Cannot establish any listening sockets"，清理必须杀进程；⑩产品决策：**状态带与 herdr client 侧边栏同屏冗余，已删除**——MuDi 守窗外的世界（通知+托盘），窗口内归 herdr TUI；agent 命名「项目名 (agent)」（cwd basename，回退 agent→paneId）是托盘/通知的统一标识
+- 待公子手动项: push tag v0.3.0 与 GitHub 仓库改名 re2zero/mudi 确认（M8）；README 撰写（M8 主体）；老 deepin-herdr 包卸载换装 mudi；M7 真实流程验收待下次 herdr 更新；本机 11:34 的 /usr/bin/mudi 遗留进程可关掉换装新版
 
 ## 6. 会话提示词模板（公子直接粘贴）
 
