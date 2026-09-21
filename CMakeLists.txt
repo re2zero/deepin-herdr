@@ -3,7 +3,7 @@ project(mudi LANGUAGES CXX)
 
 # Default version, overridden by debian/rules via -DAPP_VERSION
 if(NOT DEFINED APP_VERSION)
-    set(APP_VERSION "0.2.1")
+    set(APP_VERSION "0.2.2")
 endif()
 message(STATUS "   >>> Version: ${APP_VERSION}")
 
@@ -97,6 +97,7 @@ set(SOURCES
     src/updatebanner.cpp
     src/updater.cpp
     src/agentmonitor.cpp
+    src/tray.cpp
 )
 
 set(HEADERS
@@ -107,6 +108,13 @@ set(HEADERS
     src/updatebanner.h
     src/updater.h
     src/agentmonitor.h
+    src/tray.h
+)
+
+# embedded logo: tray icon fallback when the hicolor theme icon is not
+# installed (running from a build tree)
+set(RESOURCES
+    src/assets/assets.qrc
 )
 
 set(TRANSLATION_FILES
@@ -118,7 +126,7 @@ foreach(ts_file ${TRANSLATION_FILES})
     qt_add_translation(QM_FILES ${ts_file})
 endforeach()
 
-add_executable(mudi ${SOURCES} ${HEADERS} ${QM_FILES})
+add_executable(mudi ${SOURCES} ${HEADERS} ${RESOURCES} ${QM_FILES})
 
 target_compile_definitions(mudi PRIVATE HAVE_DTK=${HAVE_DTK})
 

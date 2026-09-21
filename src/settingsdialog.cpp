@@ -470,6 +470,10 @@ QWidget *SettingsDialog::createHerdrPage()
     connect(m_agentNotifyCheck, &QCheckBox::toggled, m_agentNotifyIdleCheck, &QWidget::setEnabled);
     rows.add(makeFullRow(m_agentNotifyIdleCheck));
 
+    m_closeToTrayCheck = new QCheckBox(QObject::tr("Keep running in the tray when the window is closed"), page);
+    m_closeToTrayCheck->setChecked(settings.value("closeToTray", false).toBool());
+    rows.add(makeFullRow(m_closeToTrayCheck));
+
     v->addStretch();
 
     auto applyMirror = [this]() {
@@ -567,6 +571,7 @@ void SettingsDialog::persist()
     store.setValue("autoCheckUpdates", m_autoCheckCheck->isChecked());
     store.setValue("agentNotify", m_agentNotifyCheck->isChecked());
     store.setValue("agentNotifyIdle", m_agentNotifyIdleCheck->isChecked());
+    store.setValue("closeToTray", m_closeToTrayCheck->isChecked());
 }
 
 void SettingsDialog::applyFontPreview()

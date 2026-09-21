@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "platform.h"
 
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QMenuBar>
 
@@ -19,12 +20,16 @@ void setupShell(QMainWindow *window, AppCore *core)
     window->setWindowIcon(QIcon::fromTheme(QStringLiteral("mudi")));
     window->resize(1200, 800);
 
-    window->connect(core, &AppCore::closeRequested, window, &QMainWindow::close);
+    // programmatic closes (terminal finished, first-run abort) quit the
+    // app outright; the user's window close goes through AppCore's
+    // eventFilter for the close-to-tray policy
+    window->connect(core, &AppCore::closeRequested, qApp, &QCoreApplication::quit);
     core->setTranslucencyHandler([window](bool on) {
         window->setAttribute(Qt::WA_TranslucentBackground, on);
     });
 
     core->init();
+    window->installEventFilter(core);
 
     window->setCentralWidget(core->container());
     window->menuBar()->addMenu(core->themeMenu());
@@ -39,11 +44,12 @@ public:
     {
         setWindowIcon(QIcon::fromTheme(QStringLiteral("mudi")));
         resize(1200, 800);
-        connect(core, &AppCore::closeRequested, this, &DMainWindow::close);
+        connect(core, &AppCore::closeRequested, qApp, &QCoreApplication::quit);
         core->setTranslucencyHandler([this](bool on) {
             setTranslucentBackground(on);
         });
         core->init();
+        installEventFilter(core);
 
         titlebar()->setSwitchThemeMenuVisible(false);
         if (QMenu *dtkMenu = titlebar()->menu()) {

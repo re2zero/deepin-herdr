@@ -109,6 +109,38 @@ Please install herdr manually to ~/.local/bin/herdr</translation>
         <source>%1 is %2</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="712"/>
+        <source>Quit MuDi</source>
+        <translation type="unfinished">Quit MuDi</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="713"/>
+        <source>herdr server is still running in the background.</source>
+        <translation type="unfinished">herdr server is still running in the background.</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="715"/>
+        <source>Close — quit MuDi only: the herdr server keeps running, your workspaces and agents stay alive.
+Quit — also stop the herdr server: all processes in your workspaces will be terminated.</source>
+        <translation type="unfinished">Close — quit MuDi only: the herdr server keeps running, your workspaces and agents stay alive.
+Quit — also stop the herdr server: all processes in your workspaces will be terminated.</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="721"/>
+        <source>Close</source>
+        <translation type="unfinished">Close</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="722"/>
+        <source>Quit</source>
+        <translation type="unfinished">Quit</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="725"/>
+        <source>Cancel</source>
+        <translation type="unfinished">Cancel</translation>
+    </message>
 </context>
 <context>
     <name>MainWindow</name>
@@ -406,6 +438,11 @@ Please install herdr manually to ~/.local/bin/herdr</translation>
         <source>This font is not monospaced; terminal alignment may be affected.</source>
         <translation type="unfinished">This font is not monospaced; terminal alignment may be affected.</translation>
     </message>
+    <message>
+        <location filename="../src/settingsdialog.cpp" line="472"/>
+        <source>Keep running in the tray when the window is closed</source>
+        <translation type="unfinished">Keep running in the tray when the window is closed</translation>
+    </message>
 </context>
 <context>
     <name>ReleaseUpdater</name>
@@ -508,6 +545,57 @@ multi-pane workspaces, tabs, and AI agent integration.</source>
 workspace manager for AI coding agents.
 herdr provides a terminal-based IDE experience with
 multi-pane workspaces, tabs, and AI agent integration.</translation>
+    </message>
+</context>
+<context>
+    <name>TrayIcon</name>
+    <message>
+        <location filename="../src/tray.cpp" line="56"/>
+        <source>Show MuDi</source>
+        <translation type="unfinished">Show MuDi</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/tray.cpp" line="47"/>
+        <source>%n running</source>
+        <translation type="unfinished">
+            <numerusform>%n running</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/tray.cpp" line="48"/>
+        <source>%n blocked</source>
+        <translation type="unfinished">
+            <numerusform>%n blocked</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/tray.cpp" line="49"/>
+        <source>%n finished</source>
+        <translation type="unfinished">
+            <numerusform>%n finished</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/tray.cpp" line="50"/>
+        <source>%n idle</source>
+        <translation type="unfinished">
+            <numerusform>%n idle</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../src/tray.cpp" line="53"/>
+        <source>MuDi — no agents</source>
+        <translation type="unfinished">MuDi — no agents</translation>
+    </message>
+    <message>
+        <location filename="../src/tray.cpp" line="55"/>
+        <source>MuDi — %1</source>
+        <translation type="unfinished">MuDi — %1</translation>
+    </message>
+    <message>
+        <location filename="../src/tray.cpp" line="77"/>
+        <source>Quit</source>
+        <translation type="unfinished">Quit</translation>
     </message>
 </context>
 </TS>

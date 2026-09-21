@@ -1,6 +1,7 @@
 #include "agentmonitor.h"
 #include "platform.h"
 
+#include <algorithm>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -105,6 +106,18 @@ void AgentMonitor::handlePollFinished()
             a.value("cwd").toString(),
         });
     }
+
+    QVector<AgentSummary> snapshot;
+    snapshot.reserve(fresh.size());
+    for (auto it = fresh.constBegin(); it != fresh.constEnd(); ++it) {
+        const AgentInfo info = infos.value(it.key());
+        snapshot.append({it.key(), info.agent, info.title, it.value()});
+    }
+    std::sort(snapshot.begin(), snapshot.end(),
+              [](const AgentSummary &a, const AgentSummary &b) {
+                  return a.paneId < b.paneId;
+              });
+    emit agentsChanged(snapshot);
 
     QSettings settings = Platform::appSettings();
     const bool enabled = settings.value("agentNotify", true).toBool();

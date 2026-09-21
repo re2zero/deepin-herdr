@@ -81,6 +81,7 @@ private:
     QPushButton *m_herdrUpdateButton;
     QCheckBox *m_agentNotifyCheck;
     QCheckBox *m_agentNotifyIdleCheck;
+    QCheckBox *m_closeToTrayCheck;
 
     // about page
     QLabel *m_appStatus;

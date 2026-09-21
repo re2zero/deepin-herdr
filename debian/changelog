@@ -16,6 +16,12 @@ mudi (0.2.2) unstable; urgency=medium
     lifecycle banners and a fallback plain shell.
   * Add CI build matrix (linux x86_64/aarch64, macOS) with optional
     libchardet.
+  * Notifications navigate to the agent pane: clicking the body or the
+    "View" action raises the window and runs `herdr agent focus`.
+  * System tray presence with agent summary tooltip, blocked-agent
+    menu shortcuts and an optional close-to-tray mode; quitting from
+    the tray goes through a confirmation with an explicit choice to
+    stop the herdr server.
 
  -- re2zero <yangwu@uniontech.com>  Mon, 21 Sep 2026 11:30:00 +0800
 

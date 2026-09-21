@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QObject>
 #include <QString>
+#include <QVector>
 
 class QProcess;
 class QTimer;
@@ -22,6 +23,14 @@ class AgentMonitor : public QObject {
 public:
     explicit AgentMonitor(const QString &herdrBinary, QObject *parent = nullptr);
 
+    // one row of `herdr agent list`, consumed by tray tooltip/menu
+    struct AgentSummary {
+        QString paneId;
+        QString agent;
+        QString title;
+        QString status;
+    };
+
     void start();
     void stop();
     bool isRunning() const;
@@ -33,6 +42,9 @@ signals:
     // status: "blocked", "done" or "idle"
     void agentAttention(const QString &paneId, const QString &agent,
                         const QString &title, const QString &cwd, const QString &status);
+
+    // full snapshot after every successful poll, sorted by pane id
+    void agentsChanged(const QVector<AgentMonitor::AgentSummary> &agents);
 
 private slots:
     void pollNow();

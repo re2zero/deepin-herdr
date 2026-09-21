@@ -3,6 +3,7 @@
 #include "updatebanner.h"
 #include "agentmonitor.h"
 #include "platform.h"
+#include "tray.h"
 #include "version.h"
 
 #include <algorithm>
@@ -11,6 +12,7 @@
 #include <QDBusInterface>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QDialog>
 #include <QActionGroup>
 #include <QDesktopServices>
 #include <QDir>
@@ -20,12 +22,15 @@
 #include <QLabel>
 #include <QLocalSocket>
 #include <QMenu>
+#include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QProcess>
+#include <QPushButton>
 #include <QSettings>
 #include <QShortcut>
 #include <QStandardPaths>
+#include <QSystemTrayIcon>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QVariant>
@@ -100,6 +105,7 @@ void AppCore::init()
     restoreTerminalSettings();
     initUpdateSystem();
     checkHerdrAndStart();
+    initTray();
 }
 
 QAction *AppCore::settingsAction() const
@@ -529,6 +535,10 @@ void AppCore::startAgentMonitor()
         m_agentMonitor = new AgentMonitor(findHerdrBinary(), this);
         connect(m_agentMonitor, &AgentMonitor::agentAttention,
                 this, &AppCore::onAgentAttention);
+        if (m_tray) {
+            connect(m_agentMonitor, &AgentMonitor::agentsChanged,
+                    m_tray, &TrayIcon::refreshAgents);
+        }
     }
     m_agentMonitor->start();
 }
@@ -632,18 +642,118 @@ void AppCore::onNotificationClosed(uint id, uint reason)
     m_notificationPanes.remove(id);
 }
 
+// Tray presence (M6b): the watch outlives a closed window. Built after
+// checkHerdrAndStart so the agent monitor can feed it summaries.
+void AppCore::initTray()
+{
+    m_tray = new TrayIcon(this);
+    connect(m_tray, &TrayIcon::showWindowRequested, this, [this]() {
+        raiseMainWindow();
+    });
+    connect(m_tray, &TrayIcon::focusPaneRequested, this, &AppCore::focusPane);
+    connect(m_tray, &TrayIcon::quitRequested, this, &AppCore::confirmQuitFromTray);
+    if (m_agentMonitor) {
+        connect(m_agentMonitor, &AgentMonitor::agentsChanged,
+                m_tray, &TrayIcon::refreshAgents);
+    }
+    m_tray->show();
+}
+
+bool AppCore::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::Close && watched == m_container->window()) {
+        // re-read on every close: flipping the setting applies at once
+        QSettings settings = Platform::appSettings();
+        if (settings.value("closeToTray", false).toBool()
+                && QSystemTrayIcon::isSystemTrayAvailable()) {
+            event->ignore();
+            m_container->window()->hide();
+            return true;
+        }
+        // explicit quit: with a tray icon around, the implicit
+        // quit-on-last-window-closed can no longer be trusted (its
+        // internal window keeps the app alive after the main window
+        // is gone)
+        qApp->quit();
+    }
+    return QObject::eventFilter(watched, event);
+}
+
+void AppCore::raiseMainWindow()
+{
+    QWidget *win = m_container->window();
+    // clear only the minimized bit: showNormal() would also undo a
+    // maximized window (tray restore lost maximization on the real
+    // desktop)
+    win->setWindowState(win->windowState() & ~Qt::WindowMinimized);
+    win->show();
+    win->raise();
+    win->activateWindow();
+}
+
+// Tray quit goes through a confirmation. The dangerous verb sits on
+// the far left, away from the safe pair on the right (three buttons in
+// a row invite mis-clicks); "Close" is the default (MuDi quits, the
+// herdr server and every pane's agent live on) and both consequences
+// are spelled out in the description.
+void AppCore::confirmQuitFromTray()
+{
+    QDialog dialog(m_container->window());
+    dialog.setWindowTitle(tr("Quit MuDi"));
+    auto *v = new QVBoxLayout(&dialog);
+    v->setContentsMargins(24, 20, 24, 20);
+    v->setSpacing(12);
+
+    auto *mainLabel = new QLabel(
+        tr("herdr server is still running in the background."), &dialog);
+    auto *descLabel = new QLabel(
+        tr("Close — quit MuDi only: the herdr server keeps running, your workspaces and agents stay alive.\n"
+           "Quit — also stop the herdr server: all processes in your workspaces will be terminated."),
+        &dialog);
+    descLabel->setWordWrap(true);
+    v->addWidget(mainLabel);
+    v->addWidget(descLabel);
+    v->addSpacing(4);
+
+    auto *buttons = new QHBoxLayout;
+    buttons->setSpacing(12);
+    auto *quitBtn = new QPushButton(tr("Quit"), &dialog);
+    // color-only stylesheet: any pseudo-state rule here would switch
+    // the button to stylesheet painting and mangle its focus rendering;
+    // the shared theme already draws a clear focus highlight
+    quitBtn->setStyleSheet(QStringLiteral("color: #F54A45;"));
+    auto *cancelBtn = new QPushButton(tr("Cancel"), &dialog);
+    auto *closeBtn = new QPushButton(tr("Close"), &dialog);
+    closeBtn->setDefault(true);
+    buttons->addWidget(quitBtn);
+    buttons->addStretch();
+    buttons->addWidget(cancelBtn);
+    buttons->addWidget(closeBtn);
+    v->addLayout(buttons);
+
+    connect(quitBtn, &QPushButton::clicked, &dialog, [&dialog]() { dialog.done(2); });
+    connect(closeBtn, &QPushButton::clicked, &dialog, &QDialog::accept);
+    // Esc and the window close button land on reject(): no action
+    closeBtn->setFocus();
+
+    const int result = dialog.exec();
+    if (result == 2) {
+        const QString binary = findHerdrBinary();
+        if (!binary.isEmpty()) {
+            QProcess::startDetached(binary, {"server", "stop"});
+        }
+        qApp->quit();
+    } else if (result == QDialog::Accepted) {
+        qApp->quit();
+    }
+}
+
 // Bring the window forward and point herdr at the pane the agent runs
 // in. The focus command is best-effort: a stale pane id or an older
 // herdr without `agent focus` still leaves the window raised.
 void AppCore::focusPane(const QString &paneId)
 {
-    QWidget *win = m_container->window();
-    if (win->isMinimized()) {
-        win->showNormal();
-    }
-    win->show();
-    win->raise();
-    win->activateWindow();
+    raiseMainWindow();
 
     const QString binary = findHerdrBinary();
     if (binary.isEmpty()) {

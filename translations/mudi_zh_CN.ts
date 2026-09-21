@@ -110,6 +110,38 @@ Please install herdr manually to ~/.local/bin/herdr</source>
         <source>%1 is %2</source>
         <translation>%1 %2</translation>
     </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="712" />
+        <source>Quit MuDi</source>
+        <translation>退出 MuDi</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="713" />
+        <source>herdr server is still running in the background.</source>
+        <translation>herdr server 仍在后台运行。</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="715" />
+        <source>Close — quit MuDi only: the herdr server keeps running, your workspaces and agents stay alive.
+Quit — also stop the herdr server: all processes in your workspaces will be terminated.</source>
+        <translation>关闭：仅退出 MuDi，herdr server 继续在后台运行，工作区与 agent 保持活跃。
+退出：同时停止 herdr server，工作区中的所有进程将被终止。</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="721" />
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="722" />
+        <source>Quit</source>
+        <translation>退出</translation>
+    </message>
+    <message>
+        <location filename="../src/appcore.cpp" line="725" />
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
 </context>
 <context>
     <name>MainWindow</name>
@@ -459,6 +491,11 @@ Please install herdr manually to ~/.local/bin/herdr</source>
         <source>This font is not monospaced; terminal alignment may be affected.</source>
         <translation>该字体非等宽字体，终端对齐可能受到影响。</translation>
     </message>
+    <message>
+        <location filename="../src/settingsdialog.cpp" line="472" />
+        <source>Keep running in the tray when the window is closed</source>
+        <translation>关闭窗口后驻留系统托盘</translation>
+    </message>
 </context>
 <context>
     <name>ReleaseUpdater</name>
@@ -561,6 +598,57 @@ multi-pane workspaces, tabs, and AI agent integration.</source>
 工作区管理器图形前端。
 herdr 提供基于终端的 IDE 体验，包含
 多窗格工作区、标签页和 AI 代理集成。</translation>
+    </message>
+</context>
+<context>
+    <name>TrayIcon</name>
+    <message>
+        <location filename="../src/tray.cpp" line="56" />
+        <source>Show MuDi</source>
+        <translation>显示主窗</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/tray.cpp" line="47" />
+        <source>%n running</source>
+        <translation>
+            <numerusform>%n 个运行中</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/tray.cpp" line="48" />
+        <source>%n blocked</source>
+        <translation>
+            <numerusform>%n 个等待输入</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/tray.cpp" line="49" />
+        <source>%n finished</source>
+        <translation>
+            <numerusform>%n 个已完成</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/tray.cpp" line="50" />
+        <source>%n idle</source>
+        <translation>
+            <numerusform>%n 个空闲</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../src/tray.cpp" line="53" />
+        <source>MuDi — no agents</source>
+        <translation>MuDi — 无 agent</translation>
+    </message>
+    <message>
+        <location filename="../src/tray.cpp" line="55" />
+        <source>MuDi — %1</source>
+        <translation>MuDi — %1</translation>
+    </message>
+    <message>
+        <location filename="../src/tray.cpp" line="77" />
+        <source>Quit</source>
+        <translation>退出</translation>
     </message>
 </context>
 </TS>

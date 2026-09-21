@@ -26,9 +26,11 @@ static constexpr const char *THEME_NINE_NAME  = "Ura";
 static constexpr const char *THEME_TEN_NAME   = "One light";
 
 class AgentMonitor;
+class QEvent;
 class QMenu;
 class QAction;
 class QTermWidget;
+class TrayIcon;
 class UpdateBanner;
 
 // Application logic core, window-shell independent: owns the terminal
@@ -72,12 +74,19 @@ private slots:
                           const QString &title, const QString &cwd, const QString &status);
     void onNotificationAction(uint id, const QString &action);
     void onNotificationClosed(uint id, uint reason);
+    void confirmQuitFromTray();
 
 private:
+    // close-to-tray policy: hide instead of closing when enabled and a
+    // tray host exists
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
     void initContent();
     void initThemeMenu();
     void initUpdateSystem();
     void initNotificationActivation();
+    void initTray();
+    void raiseMainWindow();
     void focusPane(const QString &paneId);
     void checkHerdrAndStart();
     void runFirstRunInstall();
@@ -125,6 +134,7 @@ private:
     ReleaseUpdater *m_appUpdater = nullptr;
     UpdateBanner *m_banner = nullptr;
     AgentMonitor *m_agentMonitor = nullptr;
+    TrayIcon *m_tray = nullptr;
     QString m_herdrVersion;
     // in-flight desktop notifications: notification id -> pane to focus
     QHash<uint, QString> m_notificationPanes;
