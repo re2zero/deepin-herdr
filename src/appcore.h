@@ -2,6 +2,7 @@
 #define APPCORE_H
 
 #include <QFont>
+#include <QHash>
 #include <QObject>
 #include <QTimer>
 #include <QVector>
@@ -69,11 +70,15 @@ private slots:
     void onAutoCopyChanged(bool enabled);
     void onAgentAttention(const QString &paneId, const QString &agent,
                           const QString &title, const QString &cwd, const QString &status);
+    void onNotificationAction(uint id, const QString &action);
+    void onNotificationClosed(uint id, uint reason);
 
 private:
     void initContent();
     void initThemeMenu();
     void initUpdateSystem();
+    void initNotificationActivation();
+    void focusPane(const QString &paneId);
     void checkHerdrAndStart();
     void runFirstRunInstall();
     void ensureServerRunning(const QString &socketPath);
@@ -121,6 +126,8 @@ private:
     UpdateBanner *m_banner = nullptr;
     AgentMonitor *m_agentMonitor = nullptr;
     QString m_herdrVersion;
+    // in-flight desktop notifications: notification id -> pane to focus
+    QHash<uint, QString> m_notificationPanes;
     QVector<BannerRequest> m_bannerQueue;
     BannerRequest m_currentBanner;
 };

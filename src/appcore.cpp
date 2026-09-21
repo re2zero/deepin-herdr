@@ -9,6 +9,8 @@
 #include <QClipboard>
 #include <QDBusConnection>
 #include <QDBusInterface>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QActionGroup>
 #include <QDesktopServices>
 #include <QDir>
@@ -94,6 +96,7 @@ void AppCore::init()
 
     initContent();
     initThemeMenu();
+    initNotificationActivation();
     restoreTerminalSettings();
     initUpdateSystem();
     checkHerdrAndStart();
@@ -533,7 +536,6 @@ void AppCore::startAgentMonitor()
 void AppCore::onAgentAttention(const QString &paneId, const QString &agent,
                                const QString &title, const QString &cwd, const QString &status)
 {
-    Q_UNUSED(paneId);
     // the user is already looking at the app
     if (m_container->window()->isActiveWindow()) {
         return;
@@ -563,17 +565,101 @@ void AppCore::onAgentAttention(const QString &paneId, const QString &agent,
     }
     QVariantMap hints;
     hints.insert(QStringLiteral("desktop-entry"), QStringLiteral("mudi"));
-    notifications.asyncCallWithArgumentList("Notify", {
+    // "default" fires on notification body click where the daemon
+    // supports it; the labelled button covers the rest
+    const QStringList actions = {
+        QStringLiteral("default"), tr("View"),
+    };
+    QDBusPendingReply<uint> reply = notifications.asyncCallWithArgumentList("Notify", {
         QVariant(QStringLiteral("MuDi")),
         QVariant::fromValue(static_cast<uint>(0)),
         QVariant(QStringLiteral("mudi")),
         QVariant(tr("%1 is %2").arg(agent, stateText)),
         QVariant(body),
-        QStringList(),
+        QVariant(actions),
         hints,
         QVariant::fromValue(-1),
     });
+    auto *watcher = new QDBusPendingCallWatcher(reply, this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, watcher, paneId]() {
+        watcher->deleteLater();
+        QDBusPendingReply<uint> reply = *watcher;
+        if (reply.isError() || reply.value() == 0) {
+            return; // daemon gone or refused: nothing to route back
+        }
+        m_notificationPanes.insert(reply.value(), paneId);
+    });
 #endif
+}
+
+// Match rules for the notification daemon's activation signals. They go
+// on the same session-bus connection the Notify calls went out on: some
+// daemons address these signals to the sender's unique name, which a
+// private second connection would never receive.
+void AppCore::initNotificationActivation()
+{
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    const QString service = QStringLiteral("org.freedesktop.Notifications");
+    const QString path = QStringLiteral("/org/freedesktop/Notifications");
+    if (!bus.connect(service, path, service, QStringLiteral("ActionInvoked"),
+                     this, SLOT(onNotificationAction(uint,QString)))) {
+        qWarning() << "notification activation: ActionInvoked match rule failed";
+    }
+    if (!bus.connect(service, path, service, QStringLiteral("NotificationClosed"),
+                     this, SLOT(onNotificationClosed(uint,uint)))) {
+        qWarning() << "notification activation: NotificationClosed match rule failed";
+    }
+#endif
+}
+
+void AppCore::onNotificationAction(uint id, const QString &action)
+{
+    if (action != QLatin1String("default") && action != QLatin1String("view")) {
+        return;
+    }
+    const QString paneId = m_notificationPanes.value(id);
+    if (paneId.isEmpty()) {
+        return;
+    }
+    focusPane(paneId);
+}
+
+void AppCore::onNotificationClosed(uint id, uint reason)
+{
+    Q_UNUSED(reason);
+    m_notificationPanes.remove(id);
+}
+
+// Bring the window forward and point herdr at the pane the agent runs
+// in. The focus command is best-effort: a stale pane id or an older
+// herdr without `agent focus` still leaves the window raised.
+void AppCore::focusPane(const QString &paneId)
+{
+    QWidget *win = m_container->window();
+    if (win->isMinimized()) {
+        win->showNormal();
+    }
+    win->show();
+    win->raise();
+    win->activateWindow();
+
+    const QString binary = findHerdrBinary();
+    if (binary.isEmpty()) {
+        return;
+    }
+    auto *proc = new QProcess(this);
+    connect(proc, &QProcess::finished, this, [proc, paneId](int code, QProcess::ExitStatus st) {
+        if (st != QProcess::NormalExit || code != 0) {
+            qWarning() << "herdr agent focus" << paneId << "failed, code" << code;
+        }
+        proc->deleteLater();
+    });
+    connect(proc, &QProcess::errorOccurred, this, [proc](QProcess::ProcessError) {
+        proc->deleteLater();
+    });
+    proc->start(binary, {"agent", "focus", paneId});
 }
 
 void AppCore::ensureServerRunning(const QString &socketPath)
