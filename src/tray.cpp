@@ -60,11 +60,7 @@ void TrayIcon::rebuildMenu()
         if (a.status != QLatin1String("blocked")) {
             continue;
         }
-        QString label = a.agent.isEmpty() ? a.paneId : a.agent;
-        if (!a.title.isEmpty()) {
-            label += QStringLiteral(" — ") + a.title;
-        }
-        QAction *jump = m_menu->addAction(label);
+        QAction *jump = m_menu->addAction(a.label());
         connect(jump, &QAction::triggered, this, [this, paneId = a.paneId]() {
             emit focusPaneRequested(paneId);
         });

@@ -79,6 +79,30 @@ void AgentMonitor::pollNow()
     m_poll->start(m_binary, {"agent", "list"});
 }
 
+// "omp" alone is ambiguous the moment two agents of the same CLI run;
+// the project directory name is what actually tells them apart
+QString AgentMonitor::displayName(const QString &agent, const QString &cwd)
+{
+    QString project = cwd;
+    while (project.size() > 1 && project.endsWith(QLatin1Char('/'))) {
+        project.chop(1);
+    }
+    project = project.section(QLatin1Char('/'), -1);
+    if (agent.isEmpty()) {
+        return project;
+    }
+    if (project.isEmpty() || project == agent) {
+        return agent;
+    }
+    return QStringLiteral("%1 (%2)").arg(project, agent);
+}
+
+QString AgentMonitor::AgentSummary::label() const
+{
+    QString name = AgentMonitor::displayName(agent, cwd);
+    return name.isEmpty() ? paneId : name;
+}
+
 void AgentMonitor::handlePollFinished()
 {
     QJsonParseError parseError;
@@ -111,7 +135,7 @@ void AgentMonitor::handlePollFinished()
     snapshot.reserve(fresh.size());
     for (auto it = fresh.constBegin(); it != fresh.constEnd(); ++it) {
         const AgentInfo info = infos.value(it.key());
-        snapshot.append({it.key(), info.agent, info.title, it.value()});
+        snapshot.append({it.key(), info.agent, info.title, it.value(), info.cwd});
     }
     std::sort(snapshot.begin(), snapshot.end(),
               [](const AgentSummary &a, const AgentSummary &b) {

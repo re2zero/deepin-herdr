@@ -29,7 +29,14 @@ public:
         QString agent;
         QString title;
         QString status;
+        QString cwd;
+
+        // "project (agent)" — the project directory name is what tells
+        // same-named agents apart; falls back to agent, then paneId
+        QString label() const;
     };
+
+    static QString displayName(const QString &agent, const QString &cwd);
 
     void start();
     void stop();
