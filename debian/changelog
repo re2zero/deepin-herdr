@@ -1,3 +1,19 @@
+mudi (0.3.0) unstable; urgency=medium
+
+  * Close the herdr server lifecycle loop (M7): a low-frequency
+    `herdr status` probe tracks the running server, and after a herdr
+    update the app now offers a guided restart — destructive-action
+    confirmation, stop, and an automatic relaunch that reattaches the
+    client in place. Protocol mismatches and pending restarts surface
+    as a banner and in the herdr settings page.
+  * Name agents by their project: caps, tray entries and notifications
+    read "project (agent)" so same-named agents stay distinguishable.
+  * Remove the in-window agent status strip: it duplicated the herdr
+    client sidebar; window-side monitoring stays with herdr, MuDi
+    watches from outside the window (notifications + tray).
+
+ -- re2zero <re2zero@users.noreply.github.com>  Mon, 21 Sep 2026 12:00:00 +0800
+
 mudi (0.2.2) unstable; urgency=medium
 
   * Rename the project to MuDi (牧笛): binary, desktop entry, icon,
