@@ -120,20 +120,12 @@ Windows ConPTY 移植、macOS 通知补齐（`agentmonitor` 现在 `!WIN && !MAC
 
 ```
 ## 5. 当前状态
-- 当前里程碑: M6（6a 完成，6b 进行中）
-- 最近提交: <hash> <subject>
-- 断点/下一步: <具体到文件与函数>
-- 新坑与新决策: <供长期记忆沉淀的候选>
-- 待公子手动项: <如有>
-```
 
-## 5. 当前状态
-
-- 当前里程碑: 尚未开工；首个会话从 **M6a** 开始
-- 最近提交: b8d7018 feat: rename project to MuDi (牧笛)
-- 断点/下一步: 无断点。M6a 入口在 `src/appcore.cpp onAgentAttention()`（Notify 调用改造）与新增的 DBus activation 监听
-- 新坑与新决策: herdr 0.9.1 CLI 具备 `agent focus` / `status` / `agent wait`，M6/M7 技术路线已确定（见第 1 节）
-- 待公子手动项: GitHub 仓库改名 re2zero/mudi（M8 前完成即可）；本文件与 plan 相关改动待提交
+- 当前里程碑: M6 全部完成（6a=32d757f 通知导航；6b=f35b105 托盘常驻；6c 状态带本次提交）——牧羊人闭环就位；下一会话从 **M7 server 生命周期闭环** 开始
+- 最近提交: 见 git log（6c: feat: in-window agent status strip）
+- 断点/下一步: 无断点。M7 入口：①AppCore 增低频（30s）`herdr status` 探测（YAML 按行解析，勿引依赖），缓存 serverRunning/serverVersion/protocolCompatible；②SettingsDialog::createHerdrPage 顶部 server 状态区（运行状态/版本/协议兼容红字 + 「重启 server」按钮）；③herdr 更新安装完成后横幅 showNotice("herdr 已更新…", "重启 server")（仿 BANNER_RETRY 路由）→ 破坏性确认（说明会重启各 pane 进程）→ `herdr server stop` → 复用 ensureServerRunning 重试链；④protocol 不兼容（status 的 private_protocol_compatible: no 或 client 报 protocol_mismatch）走同一路径。验收：PATH shim 模拟 status 各分支（running/not running/incompatible）；真实流程等下次 herdr 更新时公子走一遍；自动化禁止对真实 server 执行 stop
+- 新坑与新决策: ①**QSystemTrayIcon 会破坏 quitOnLastWindowClosed**——托盘应用必须显式接管退出语义（关窗事件里二选一：hide 或 qApp->quit()）；②窗口恢复用 `setWindowState(state & ~Qt::WindowMinimized)`，showNormal() 会连带取消最大化；③无头测试关窗用 python-xlib 直发 WM_DELETE（kwin 对 xdotool windowclose/合成 Alt+F4 均不可靠），最大化用 _NET_WM_STATE ClientMessage；④TS 复数条目必须 `<message numerus="yes">`；⑤DTK 窗有伴生 X 窗，按名操作前用 `_NET_WM_WINDOW_TYPE_NORMAL` 筛真窗；⑥测试脚本跑前清理残留（pkill + 删 /tmp/.X11-unix/X<号> + 按启动日期杀堆积的 kglobalacceld/portal-dde）；⑦**QSS 伪态规则会毁掉按钮焦点渲染**——按钮个性化只写一条基础 color 规则，焦点高亮交给主题；⑧QHBoxLayout 里胶囊类控件要尾部 addStretch + sizePolicy(Maximum, Fixed)，否则被拉伸铺满
+- 待公子手动项: GitHub 仓库改名 re2zero/mudi（M8 前）；老 deepin-herdr 包卸载换装 mudi；M7 的真实流程验收待下次 herdr 更新时进行
 
 ## 6. 会话提示词模板（公子直接粘贴）
 

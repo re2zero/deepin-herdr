@@ -26,6 +26,7 @@ static constexpr const char *THEME_NINE_NAME  = "Ura";
 static constexpr const char *THEME_TEN_NAME   = "One light";
 
 class AgentMonitor;
+class AgentStatusStrip;
 class QEvent;
 class QMenu;
 class QAction;
@@ -115,6 +116,7 @@ private:
 
     QWidget *m_container = nullptr;
     QTermWidget *m_terminal = nullptr;
+    AgentStatusStrip *m_statusStrip = nullptr;
     QTimer *m_launchTimer;
     QTimer *m_serverWatchTimer = nullptr;
     int m_launchAttempts;

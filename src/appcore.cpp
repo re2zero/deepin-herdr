@@ -3,6 +3,7 @@
 #include "updatebanner.h"
 #include "agentmonitor.h"
 #include "platform.h"
+#include "statusstrip.h"
 #include "tray.h"
 #include "version.h"
 
@@ -122,6 +123,13 @@ void AppCore::initContent()
 
     m_banner = new UpdateBanner(m_container);
     layout->addWidget(m_banner);
+
+    // agent status strip (M6c): between banner and terminal, hidden
+    // until a poll finds agents; a capsule click focuses the pane
+    m_statusStrip = new AgentStatusStrip(m_container);
+    layout->addWidget(m_statusStrip);
+    connect(m_statusStrip, &AgentStatusStrip::paneClicked,
+            this, &AppCore::focusPane);
 
     m_terminal = new QTermWidget(0, m_container);
     layout->addWidget(m_terminal);
@@ -538,6 +546,10 @@ void AppCore::startAgentMonitor()
         if (m_tray) {
             connect(m_agentMonitor, &AgentMonitor::agentsChanged,
                     m_tray, &TrayIcon::refreshAgents);
+        }
+        if (m_statusStrip) {
+            connect(m_agentMonitor, &AgentMonitor::agentsChanged,
+                    m_statusStrip, &AgentStatusStrip::refreshAgents);
         }
     }
     m_agentMonitor->start();
