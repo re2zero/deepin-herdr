@@ -102,6 +102,9 @@ jobs:
       - name: Create release and upload assets
         env:
           GH_TOKEN: ${{ github.token }}
+          # this job never checks out the repo, so gh has no git context
+          # to resolve the repository from (the v0.3.0 attach failure)
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --generate-notes
