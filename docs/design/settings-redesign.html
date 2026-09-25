@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MuDi 设置界面重设计 — DTK 风格设计稿</title>
+<style>
+  /* ============ DTK 设计 token ============
+     高亮 #0081FF（DTK 默认 highlight）
+     危险  #F54A45   警告  #FFB906
+     文字  主 90% / 次 55% / 弱 35%
+     控件圆角 8px，分组卡片圆角 12px，窗口圆角 16px
+  ========================================= */
+  :root{
+    --accent:#0081FF; --accent-hover:#339CFF; --accent-active:#0068CE;
+    --danger:#F54A45; --danger-bg:#FFEEEB;
+    --warn:#B26A00; --warn-bg:#FFF8E6;
+    --ok:#34C724;
+    --win-bg:#F6F6F7; --card:#FFFFFF;
+    --line:rgba(0,0,0,.06); --ctl-line:rgba(0,0,0,.10);
+    --t1:rgba(0,0,0,.90); --t2:rgba(0,0,0,.55); --t3:rgba(0,0,0,.35);
+    --ctl-bg:#FFFFFF; --ctl-hover:rgba(0,0,0,.05);
+    --nav-hover:rgba(0,0,0,.06);
+    --sw-off:rgba(0,0,0,.14); --sw-ball:#FFFFFF;
+    --shadow:0 24px 64px rgba(0,0,0,.22), 0 2px 8px rgba(0,0,0,.08);
+    --menu-shadow:0 8px 28px rgba(0,0,0,.16);
+  }
+  .dark{
+    --accent:#0081FF; --accent-hover:#339CFF; --accent-active:#0068CE;
+    --danger:#F54A45; --danger-bg:rgba(245,74,69,.16);
+    --warn:#FFB906; --warn-bg:rgba(255,185,6,.14);
+    --ok:#34C724;
+    --win-bg:#212124; --card:#2A2A2E;
+    --line:rgba(255,255,255,.07); --ctl-line:rgba(255,255,255,.12);
+    --t1:rgba(255,255,255,.90); --t2:rgba(255,255,255,.55); --t3:rgba(255,255,255,.35);
+    --ctl-bg:#2E2E32; --ctl-hover:rgba(255,255,255,.08);
+    --nav-hover:rgba(255,255,255,.08);
+    --sw-off:rgba(255,255,255,.20); --sw-ball:#E6E6E6;
+    --shadow:0 24px 64px rgba(0,0,0,.6), 0 2px 8px rgba(0,0,0,.4);
+    --menu-shadow:0 8px 28px rgba(0,0,0,.5);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    background:#14161a radial-gradient(1200px 600px at 50% -10%, #2a3550, #14161a 70%);
+    font-family:"Noto Sans CJK SC","Source Han Sans SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",sans-serif;
+    padding:28px 16px 60px; color:var(--t1);
+  }
+  /* ---------- 预览工具条 ---------- */
+  .toolbar{
+    display:flex; gap:10px; align-items:center; margin-bottom:22px; flex-wrap:wrap; justify-content:center;
+    color:rgba(255,255,255,.75); font-size:13px;
+  }
+  .toolbar .chip{
+    display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:999px;
+    background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.14); cursor:pointer;
+    user-select:none; transition:background .15s;
+  }
+  .toolbar .chip:hover{background:rgba(255,255,255,.18)}
+  .toolbar .dot{width:8px;height:8px;border-radius:50%;background:#0081FF}
+  .toolbar .note{opacity:.55; font-size:12px}
+  /* ---------- DTK 窗口 ---------- */
+  .window{
+    width:760px; max-width:96vw; border-radius:16px; background:var(--win-bg);
+    box-shadow:var(--shadow); overflow:hidden;
+  }
+  /* DTK 标题栏 */
+  .titlebar{
+    height:40px; display:flex; align-items:center; justify-content:center; position:relative;
+    background:var(--win-bg); border-bottom:1px solid var(--line);
+  }
+  .titlebar .t{font-size:13px; color:var(--t1)}
+  .titlebar .close{
+    position:absolute; right:10px; top:50%; transform:translateY(-50%);
+    width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color:var(--t2);
+  }
+  .titlebar .close:hover{background:#F54A45; color:#fff}
+  /* ---------- 主体：导航 + 内容 ---------- */
+  .body{display:flex; min-height:520px}
+  .nav{
+    width:180px; flex:none; padding:12px 10px; display:flex; flex-direction:column; gap:2px;
+    border-right:1px solid var(--line);
+  }
+  .search{
+    margin:0 4px 10px; height:32px; border-radius:8px; background:var(--ctl-bg);
+    border:1px solid var(--ctl-line); display:flex; align-items:center; gap:7px; padding:0 10px;
+    color:var(--t3); font-size:13px; cursor:text;
+  }
+  .search input{border:none;outline:none;background:transparent;color:var(--t1);font-size:13px;width:100%;font-family:inherit}
+  .nav .item{
+    display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px;
+    font-size:14px; color:var(--t1); cursor:pointer; transition:background .12s;
+    user-select:none;
+  }
+  .nav .item svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;opacity:.85}
+  .nav .item:hover{background:var(--nav-hover)}
+  .nav .item.active{background:var(--accent); color:#fff}
+  .nav .item.active svg{opacity:1}
+  .nav .spacer{flex:1}
+  .nav .reset{
+    display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px;
+    font-size:13px; color:var(--t2); cursor:pointer;
+  }
+  .nav .reset:hover{background:var(--nav-hover); color:var(--t1)}
+  .badge-new{
+    margin-left:auto; font-size:10px; color:var(--accent); border:1px solid var(--accent);
+    border-radius:4px; padding:0 4px; line-height:14px; opacity:.9;
+  }
+  .nav .item.active .badge-new{color:#fff; border-color:#fff}
+  /* 内容区 */
+  .content{flex:1; overflow-y:auto; padding:18px 22px 22px; max-height:600px}
+  .page{display:none; animation:fade .18s ease}
+  .page.show{display:block}
+  @keyframes fade{from{opacity:0; transform:translateY(4px)} to{opacity:1;transform:none}}
+  .page-title{font-size:17px; font-weight:600; margin:2px 0 14px 2px; color:var(--t1)}
+  .group{border-radius:12px; background:var(--card); border:1px solid var(--line); margin-bottom:14px; overflow:hidden}
+  .group-cap{font-size:12px; color:var(--t3); margin:0 4px 6px; }
+  /* 行 */
+  .row{
+    display:flex; align-items:center; min-height:46px; padding:6px 16px; gap:12px;
+    border-bottom:1px solid var(--line); position:relative;
+  }
+  .row:last-child{border-bottom:none}
+  .row .lbl{font-size:13.5px; color:var(--t1); flex:none}
+  .row .lbl .sub{display:block; font-size:11.5px; color:var(--t3); margin-top:1px}
+  .row .grow{flex:1}
+  .row .right{margin-left:auto; display:flex; align-items:center; gap:10px}
+  /* 控件 */
+  .combo,.spin,.text{
+    height:30px; border-radius:8px; background:var(--ctl-bg); border:1px solid var(--ctl-line);
+    font-size:13px; color:var(--t1); display:inline-flex; align-items:center; padding:0 10px;
+    min-width:150px; cursor:pointer; position:relative; user-select:none; font-family:inherit;
+  }
+  .text{cursor:text; color:var(--t3)}
+  .text input{border:none;outline:none;background:transparent;color:var(--t1);width:100%;font-size:13px;font-family:inherit}
+  .combo:hover,.spin:hover{border-color:rgba(0,0,0,.2)}
+  .dark .combo:hover,.dark .spin:hover{border-color:rgba(255,255,255,.25)}
+  .combo .arrow{margin-left:auto; margin-left:8px; width:0;height:0;border:4px solid transparent;border-top-color:var(--t2); margin-top:3px}
+  .combo .menu{
+    display:none; position:absolute; top:34px; left:-1px; right:-1px; z-index:30;
+    background:var(--card); border-radius:10px; box-shadow:var(--menu-shadow); border:1px solid var(--line);
+    padding:4px; max-height:260px; overflow:auto;
+  }
+  .combo.open .menu{display:block}
+  .combo .opt{padding:6px 10px; border-radius:6px; font-size:13px; color:var(--t1)}
+  .combo .opt:hover{background:var(--ctl-hover)}
+  .combo .opt.sel{color:var(--accent)}
+  .combo .opt .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:-1px}
+  .spin{justify-content:space-between; gap:4px}
+  .spin .btn{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:14px}
+  .spin .btn:hover{background:var(--ctl-hover);color:var(--t1)}
+  /* DTK 开关 */
+  .switch{
+    width:38px;height:20px;border-radius:10px;background:var(--sw-off);position:relative;cursor:pointer;
+    transition:background .18s; flex:none;
+  }
+  .switch::after{
+    content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:var(--sw-ball); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .18s;
+  }
+  .switch.on{background:var(--accent)}
+  .switch.on::after{left:20px}
+  /* 滑杆 */
+  .slider{-webkit-appearance:none;appearance:none;width:190px;height:4px;border-radius:2px;
+    background:linear-gradient(to right, var(--accent) var(--p,70%), rgba(128,128,128,.25) var(--p,70%));outline:none;cursor:pointer}
+  .slider::-webkit-slider-thumb{
+    -webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;
+    border:.5px solid rgba(0,0,0,.15); box-shadow:0 1px 4px rgba(0,0,0,.25);
+  }
+  .pct{font-size:13px;color:var(--t2);width:40px;text-align:right;font-variant-numeric:tabular-nums}
+  /* 按钮 */
+  .btn{
+    height:30px; padding:0 16px; border-radius:8px; font-size:13px; display:inline-flex; align-items:center; gap:6px;
+    background:var(--ctl-bg); border:1px solid var(--ctl-line); color:var(--t1); cursor:pointer; user-select:none;
+    transition:filter .12s; font-family:inherit;
+  }
+  .btn:hover{filter:brightness(.97)}
+  .dark .btn:hover{filter:brightness(1.15)}
+  .btn.primary{background:var(--accent); border-color:transparent; color:#fff}
+  .btn.primary:hover{background:var(--accent-hover)}
+  .btn.primary:active{background:var(--accent-active)}
+  .btn.text-btn{border-color:transparent;background:transparent;color:var(--accent);padding:0 8px}
+  .btn.small{height:26px;padding:0 12px;font-size:12.5px}
+  /* 状态条 */
+  .banner{
+    display:flex; align-items:flex-start; gap:8px; border-radius:8px; padding:9px 12px;
+    font-size:12.5px; line-height:1.5;
+  }
+  .banner.warn{background:var(--warn-bg); color:var(--warn)}
+  .banner.err{background:var(--danger-bg); color:var(--danger)}
+  .banner.err .btn{margin-left:auto; flex:none; border-color:rgba(245,74,69,.4); color:var(--danger); background:transparent}
+  .banner svg{width:14px;height:14px;flex:none;margin-top:1px}
+  /* 状态点 */
+  .st{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--t1)}
+  .st i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(52,199,36,.15)}
+  .st.bad i{background:var(--danger);box-shadow:0 0 0 3px rgba(245,74,69,.15)}
+  .st.bad{color:var(--danger)}
+  .dim{color:var(--t2)}
+  .mini{font-size:11.5px;color:var(--t3)}
+  /* 进度条（更新下载演示） */
+  .prog{height:4px;border-radius:2px;background:rgba(128,128,128,.2);overflow:hidden;width:170px}
+  .prog i{display:block;height:100%;width:62%;background:var(--accent);border-radius:2px}
+  /* 版本徽标 */
+  .ver{font-size:12px;background:var(--ctl-hover);border-radius:4px;padding:1px 6px;color:var(--t2);font-variant-numeric:tabular-nums}
+  /* DDialog 底部按钮区 */
+  .foot{
+    display:flex; align-items:center; gap:10px; padding:12px 22px 16px; background:var(--win-bg);
+    border-top:1px solid var(--line);
+  }
+  .foot .hint{font-size:11.5px;color:var(--t3);flex:1}
+  /* 滚动条 */
+  .content::-webkit-scrollbar{width:8px}
+  .content::-webkit-scrollbar-thumb{background:rgba(128,128,128,.3);border-radius:4px}
+  .footnote{margin-top:18px;color:rgba(255,255,255,.4);font-size:12px;text-align:center;line-height:1.8}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="chip" id="themeChip"><span class="dot"></span><span id="themeLabel">深色模式</span></span>
+  <span class="chip" id="errChip">演示：server 异常态</span>
+  <span class="note">设计稿 · DTK 设计语言 · 控件可交互</span>
+</div>
+
+<div class="window" id="win">
+  <!-- DTK 标题栏 -->
+  <div class="titlebar">
+    <span class="t">设置</span>
+    <span class="close" title="关闭">
+      <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    </span>
+  </div>
+
+  <div class="body">
+    <!-- 左侧导航（DSettingsDialog 风格：图标 + 文字，圆角高亮） -->
+    <div class="nav">
+      <div class="search">
+        <svg width="13" height="13" viewBox="0 0 16 16" style="stroke:currentColor;fill:none;stroke-width:1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+        <input placeholder="搜索设置" id="searchBox">
+      </div>
+      <div class="item active" data-page="terminal">
+        <svg viewBox="0 0 20 20"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><path d="M5.5 8l2.5 2-2.5 2M10 12.5h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        终端
+      </div>
+      <div class="item" data-page="appearance">
+        <svg viewBox="0 0 20 20"><path d="M10 3a7 7 0 100 14c1.2 0 2-.9 2-2 0-.6-.3-1-.3-1.6 0-.9.8-1.4 1.7-1.4H15a2.6 2.6 0 002.4-2.6C17.2 5.7 13.9 3 10 3z"/><circle cx="7" cy="8" r=".9" fill="currentColor"/><circle cx="10.5" cy="6.5" r=".9" fill="currentColor"/><circle cx="13.5" cy="8.5" r=".9" fill="currentColor"/></svg>
+        外观
+      </div>
+      <div class="item" data-page="herdr">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.2"/><circle cx="10" cy="10" r="2.6"/><path d="M10 2.8v4.6M10 12.6v4.6M2.8 10h4.6M12.6 10h4.6" stroke-linecap="round"/></svg>
+        herdr
+      </div>
+      <div class="item" data-page="about">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.2"/><path d="M10 9v4.2" stroke-linecap="round"/><circle cx="10" cy="6.4" r=".9" fill="currentColor" stroke="none"/></svg>
+        关于与更新
+      </div>
+      <div class="spacer"></div>
+      <div class="reset">
+        <svg width="15" height="15" viewBox="0 0 20 20" style="stroke:currentColor;fill:none;stroke-width:1.5"><path d="M4 10a6 6 0 106-6c-2.5 0-4.6 1.5-5.5 3.6M4.5 3.5v4h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        恢复默认 <span class="badge-new">新</span>
+      </div>
+    </div>
+
+    <!-- 右侧内容 -->
+    <div class="content">
+
+      <!-- ============ 终端页 ============ -->
+      <div class="page show" id="page-terminal">
+        <div class="page-title">终端</div>
+
+        <div class="group" data-keywords="字体 字号 font size">
+          <div class="row">
+            <span class="lbl">字体</span>
+            <div class="right">
+              <div class="combo" style="min-width:190px" id="fontCombo">
+                <span>Noto Sans Mono CJK SC</span><span class="arrow"></span>
+                <div class="menu">
+                  <div class="opt sel">Noto Sans Mono CJK SC</div>
+                  <div class="opt">JetBrains Mono</div>
+                  <div class="opt">Sarasa Mono SC</div>
+                  <div class="opt">Ubuntu Mono</div>
+                  <div class="opt">Consolas</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row" id="monoWarnRow" style="display:none;padding-top:8px;padding-bottom:10px">
+            <div class="banner warn" style="flex:1">
+              <svg viewBox="0 0 16 16" style="stroke:currentColor;fill:none;stroke-width:1.4"><path d="M8 2L1.5 13.5h13L8 2z" stroke-linejoin="round"/><path d="M8 6.5v3.2" stroke-linecap="round"/><circle cx="8" cy="11.8" r=".7" fill="currentColor" stroke="none"/></svg>
+              该字体不是等宽字体，终端对齐可能受影响。
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl">字号</span>
+            <div class="right">
+              <div class="spin" style="min-width:120px;justify-content:space-between">
+                <span class="btn" onclick="spin(this,-1)">−</span>
+                <span id="fontVal">10 pt</span>
+                <span class="btn" onclick="spin(this,1)">＋</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group" data-keywords="光标 闪烁 cursor blink">
+          <div class="row">
+            <span class="lbl">光标形状</span>
+            <div class="right">
+              <div class="combo" style="min-width:120px" id="cursorCombo">
+                <span>块状</span><span class="arrow"></span>
+                <div class="menu">
+                  <div class="opt sel">块状</div>
+                  <div class="opt">下划线</div>
+                  <div class="opt">竖线</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl">光标闪烁</span>
+            <div class="right"><div class="switch" id="swBlink"></div></div>
+          </div>
+        </div>
+
+        <div class="group" data-keywords="回滚 缓冲 复制 scrollback copy">
+          <div class="row">
+            <span class="lbl">回滚缓冲<span class="sub">超出后丢弃最早的输出</span></span>
+            <div class="right">
+              <div class="spin" style="min-width:150px">
+                <span class="btn" onclick="spinScrol(-1)">−</span>
+                <span id="scrollVal">1000 行</span>
+                <span class="btn" onclick="spinScrol(1)">＋</span>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl">选中文字时自动复制到剪贴板</span>
+            <div class="right"><div class="switch on" id="swCopy"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 外观页 ============ -->
+      <div class="page" id="page-appearance">
+        <div class="page-title">外观</div>
+
+        <div class="group" data-keywords="主题 theme light dark auto 深浅">
+          <div class="row" style="flex-direction:column;align-items:stretch;gap:10px;padding:14px 16px">
+            <span class="lbl">应用主题</span>
+            <div style="display:flex;gap:12px">
+              <div class="themeCard sel" data-v="auto">
+                <div class="half"><div class="hl"></div><div class="split"></div></div>
+                <div class="cap">跟随系统</div>
+              </div>
+              <div class="themeCard" data-v="light">
+                <div class="half light"></div>
+                <div class="cap">浅色</div>
+              </div>
+              <div class="themeCard" data-v="dark">
+                <div class="half darkh"></div>
+                <div class="cap">深色</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group" data-keywords="终端配色 配色方案 theme1 theme2">
+          <div class="row">
+            <span class="lbl">终端配色方案</span>
+            <div class="right">
+              <div class="combo" style="min-width:190px" id="schemeCombo">
+                <span><span class="sw" style="background:#1B1E24"></span>Theme1 · 深空</span><span class="arrow"></span>
+                <div class="menu">
+                  <div class="opt sel"><span class="sw" style="background:#1B1E24"></span>Theme1 · 深空</div>
+                  <div class="opt"><span class="sw" style="background:#2C2620"></span>Theme2 · 琥珀</div>
+                  <div class="opt"><span class="sw" style="background:#10151C"></span>Theme3 · 夜航</div>
+                  <div class="opt"><span class="sw" style="background:#FFFFFF;border:1px solid rgba(0,0,0,.15)"></span>Light</div>
+                  <div class="opt"><span class="sw" style="background:#101010"></span>Dark</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group" data-keywords="透明 不透明度 opacity">
+          <div class="row">
+            <span class="lbl">背景不透明度</span>
+            <div class="right">
+              <input type="range" class="slider" id="opacity" min="30" max="100" value="100" oninput="this.style.setProperty('--p', (this.value-30)/70*100+'%'); document.getElementById('opacityVal').textContent=this.value+'%'">
+              <span class="pct" id="opacityVal">100%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ herdr 页 ============ -->
+      <div class="page" id="page-herdr">
+        <div class="page-title">herdr</div>
+
+        <!-- server 状态组 -->
+        <div class="group" data-keywords="server 状态 重启 协议">
+          <div class="row" id="serverRow">
+            <span class="st" id="serverSt"><i></i><span id="serverText">server 运行中</span></span>
+            <span class="ver" id="serverVer">v0.9.2</span>
+            <div class="right">
+              <button class="btn small">重启 server</button>
+            </div>
+          </div>
+          <div class="row" id="serverErrRow" style="display:none;padding:10px 12px">
+            <div class="banner err" style="flex:1">
+              <svg viewBox="0 0 16 16" style="stroke:currentColor;fill:none;stroke-width:1.4"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.6" stroke-linecap="round"/><circle cx="8" cy="11" r=".7" fill="currentColor" stroke="none"/></svg>
+              运行中的 server 与已安装的 herdr 协议不一致，重启后生效（会重启各 pane 进程）。
+              <button class="btn small">重启 server</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 版本与更新组 -->
+        <div class="group" data-keywords="版本 更新 检查 镜像 下载源">
+          <div class="row">
+            <span class="lbl">当前版本</span>
+            <div class="right"><span class="ver">v0.9.1</span></div>
+          </div>
+          <div class="row">
+            <span class="lbl">软件更新<span class="sub" id="herdrHint">上次检查：今天 08:12</span></span>
+            <div class="right">
+              <span class="mini" id="herdrState" style="color:var(--ok)">已是最新</span>
+              <button class="btn small">检查更新</button>
+            </div>
+          </div>
+          <div class="row" id="progRow" style="display:none">
+            <span class="lbl dim">下载中</span>
+            <div class="right"><div class="prog"><i></i></div><span class="pct">62%</span></div>
+          </div>
+          <div class="row">
+            <span class="lbl">下载源</span>
+            <div class="right">
+              <div class="combo" style="min-width:170px" id="mirrorCombo">
+                <span>自动（推荐）</span><span class="arrow"></span>
+                <div class="menu">
+                  <div class="opt sel">自动（推荐）</div>
+                  <div class="opt">GitHub 直连</div>
+                  <div class="opt">镜像优先</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl">自定义镜像</span>
+            <div class="right">
+              <div class="text" style="min-width:230px"><input placeholder="https://your-mirror.example/"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 通知与驻留组 -->
+        <div class="group" data-keywords="通知 提醒 托盘 agent 空闲 勿扰">
+          <div class="row">
+            <span class="lbl">agent 需要关注时通知我</span>
+            <div class="right"><div class="switch on" id="swNotify"></div></div>
+          </div>
+          <div class="row">
+            <span class="lbl dim">agent 转为空闲时也通知</span>
+            <div class="right"><div class="switch" id="swNotifyIdle"></div></div>
+          </div>
+          <div class="row">
+            <span class="lbl">勿扰时段<span class="sub">该时间段内仅保留托盘角标，不弹通知</span></span>
+            <div class="right">
+              <div class="combo" style="min-width:130px">
+                <span>关闭</span><span class="arrow"></span>
+                <div class="menu">
+                  <div class="opt sel">关闭</div>
+                  <div class="opt">23:00 – 08:00</div>
+                  <div class="opt">自定义…</div>
+                </div>
+              </div>
+              <span class="badge-new" style="color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;font-size:10px">新</span>
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl">关闭窗口后驻留系统托盘</span>
+            <div class="right"><div class="switch" id="swTray"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 关于与更新页 ============ -->
+      <div class="page" id="page-about">
+        <div class="page-title">关于与更新</div>
+
+        <div class="group" data-keywords="版本 应用 更新 检查">
+          <div class="row" style="padding:14px 16px;gap:14px">
+            <img src="../../src/assets/mudi.svg" onerror="this.style.display='none'" alt="" style="width:44px;height:44px;border-radius:10px">
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:600">MuDi <span style="font-weight:400;color:var(--t2)">牧笛</span></div>
+              <div class="mini" style="margin-top:2px">herdr 的桌面驾驶舱 · <span class="ver">v0.3.0</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl">应用更新</span>
+            <div class="right">
+              <span class="mini" style="color:var(--ok)">已是最新</span>
+              <button class="btn small">检查更新</button>
+              <button class="btn small">打开 Releases 页</button>
+            </div>
+          </div>
+          <div class="row">
+            <span class="lbl">启动时检查更新</span>
+            <div class="right"><div class="switch on" id="swAutoCheck"></div></div>
+          </div>
+        </div>
+
+        <div class="group" data-keywords="日志 反馈 github 许可 开源">
+          <div class="row">
+            <span class="lbl">运行日志<span class="sub">~/.local/share/mudi/logs/mudi.log</span></span>
+            <div class="right"><button class="btn small">打开日志</button><span class="badge-new" style="color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;font-size:10px">新</span></div>
+          </div>
+          <div class="row">
+            <span class="lbl">项目主页 / 问题反馈</span>
+            <div class="right"><button class="btn small">GitHub ↗</button><span class="badge-new" style="color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;font-size:10px">新</span></div>
+          </div>
+          <div class="row">
+            <span class="lbl">开源许可</span>
+            <div class="right"><span class="mini">GPL-3.0 · terminalwidget 见 3rdparty</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- DDialog 底部 -->
+  <div class="foot">
+    <span class="hint">设置即时生效，关闭时自动保存</span>
+    <button class="btn primary" style="min-width:96px;justify-content:center">OK</button>
+  </div>
+</div>
+
+<div class="footnote">
+  MuDi 设置界面重设计稿 · 对齐 DTK（deepin 25）设计语言：分组卡片 / 圆角控件 / DTK 开关 / 语义色<br>
+  带「新」徽标的是随本次重设计一并提案的功能位，详见功能缺口清单
+</div>
+
+<style>
+  .themeCard{width:118px;cursor:pointer;text-align:center}
+  .themeCard .half{height:56px;border-radius:8px;border:1.5px solid var(--ctl-line);overflow:hidden;position:relative;transition:border-color .15s}
+  .themeCard.sel .half{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,129,255,.18)}
+  .themeCard .hl{position:absolute;inset:0;background:linear-gradient(135deg,#F6F6F7 50%,#212124 50%)}
+  .themeCard .split{position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(128,128,128,.5)}
+  .themeCard .light{background:linear-gradient(135deg,#F6F6F7,#fff)}
+  .themeCard .darkh{background:linear-gradient(135deg,#212124,#2E2E32)}
+  .themeCard .cap{font-size:12px;color:var(--t2);margin-top:6px}
+  .themeCard.sel .cap{color:var(--accent)}
+</style>
+
+<script>
+  // 主题切换
+  const chip = document.getElementById('themeChip');
+  chip.onclick = () => {
+    document.getElementById('win').classList.toggle('dark');
+    document.getElementById('themeLabel').textContent =
+      document.getElementById('win').classList.contains('dark') ? '浅色模式' : '深色模式';
+  };
+  // 默认先展示深色（终端工具更常驻深色）；?theme=light 初始化浅色
+  const params = new URLSearchParams(location.search);
+  if (params.get('theme') !== 'light') {
+    document.getElementById('win').classList.add('dark');
+    document.getElementById('themeLabel').textContent = '浅色模式';
+  }
+
+  // 导航
+  document.querySelectorAll('.nav .item').forEach(it => {
+    it.onclick = () => {
+      document.querySelectorAll('.nav .item').forEach(x => x.classList.remove('active'));
+      it.classList.add('active');
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('show'));
+      document.getElementById('page-' + it.dataset.page).classList.add('show');
+    };
+  });
+  // ?page=herdr 直接打开指定页（需在导航事件注册后执行）
+  const startPage = params.get('page');
+  if (startPage) {
+    const it = document.querySelector('.nav .item[data-page="' + startPage + '"]');
+    if (it) it.click();
+  }
+
+  // 开关
+  document.addEventListener('click', e => {
+    const sw = e.target.closest('.switch');
+    if (sw) sw.classList.toggle('on');
+  });
+  // agent 通知总开关联动空闲通知
+  document.getElementById('swNotify').addEventListener('click', function(){
+    setTimeout(()=>{
+      const on = this.classList.contains('on');
+      const idle = document.getElementById('swNotifyIdle');
+      idle.style.opacity = on ? 1 : .4;
+      if (!on) idle.classList.remove('on');
+    }, 0);
+  });
+
+  // 下拉
+  document.addEventListener('click', e => {
+    const c = e.target.closest('.combo');
+    document.querySelectorAll('.combo.open').forEach(o => { if (o !== c) o.classList.remove('open'); });
+    if (!c) return;
+    if (e.target.closest('.opt')) {
+      c.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
+      e.target.closest('.opt').classList.add('sel');
+      c.querySelector('span').textContent = e.target.closest('.opt').textContent.trim();
+      if (c.id === 'fontCombo') checkMono(e.target.closest('.opt').textContent.trim());
+      c.classList.remove('open');
+      return;
+    }
+    c.classList.toggle('open');
+  });
+  // 非等宽字体警告演示
+  function checkMono(name){
+    const mono = /Mono|Consolas|Sarasa|Noto Sans Mono/.test(name);
+    document.getElementById('monoWarnRow').style.display = mono ? 'none' : 'flex';
+  }
+
+  // 步进器
+  let fontSize = 10, scroll = 1000;
+  function spin(btn, d){
+    fontSize = Math.min(72, Math.max(6, fontSize + d));
+    document.getElementById('fontVal').textContent = fontSize + ' pt';
+  }
+  function spinScrol(d){
+    scroll = Math.max(-1, Math.min(999999, scroll + Math.sign(d) * (scroll < 100 ? 100 : 500)));
+    document.getElementById('scrollVal').textContent = scroll < 0 ? '无限' : scroll + ' 行';
+  }
+
+  // server 异常态演示
+  const errChip = document.getElementById('errChip');
+  errChip.onclick = () => {
+    const bad = document.getElementById('serverErrRow').style.display !== 'flex';
+    document.getElementById('serverErrRow').style.display = bad ? 'flex' : 'none';
+    document.getElementById('serverRow').style.display = bad ? 'none' : 'flex';
+    errChip.style.background = bad ? 'rgba(0,129,255,.35)' : '';
+  };
+
+  // 搜索：过滤含关键词的分组卡片
+  document.getElementById('searchBox').addEventListener('input', function(){
+    const q = this.value.trim().toLowerCase();
+    document.querySelectorAll('.page .group').forEach(g => {
+      g.style.display = (!q || (g.dataset.keywords||'').toLowerCase().includes(q)) ? '' : 'none';
+    });
+  });
+</script>
+</body>
+</html>
