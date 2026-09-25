@@ -3,6 +3,7 @@
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -21,6 +22,12 @@ namespace {
 
 constexpr const char *GITHUB_BASE = "https://github.com";
 constexpr const char *GITHUB_API = "https://api.github.com";
+
+// M9: static release index on gh-pages, checked before the GitHub API
+// (no rate limit). Overridable with MUDI_UPDATES_URL for testing. The
+// index is keyed by install name with per-platform assets; a missing or
+// incomplete entry falls back to the API.
+constexpr const char *UPDATES_JSON_URL = "https://re2zero.github.io/mudi/updates.json";
 
 // ghproxy-style prefixes that prepend the full GitHub URL. The list is
 // tried in order; the first one that answers the probe is cached in
@@ -65,16 +72,25 @@ ReleaseUpdater::ReleaseUpdater(const QString &apiPath, const QString &assetPrefi
 {
 }
 
-QString ReleaseUpdater::platformAssetName(const QString &prefix)
+QString ReleaseUpdater::platformKey()
 {
 #if defined(Q_OS_WIN)
-    return prefix + "-windows-x86_64.zip"; // windows assets are x86_64-only today
+    return QStringLiteral("windows-x86_64"); // windows assets are x86_64-only today
 #elif defined(Q_OS_MACOS)
-    QString arch = (QSysInfo::buildCpuArchitecture() == "arm64") ? "aarch64" : "x86_64";
-    return prefix + "-macos-" + arch;
+    return (QSysInfo::buildCpuArchitecture() == "arm64")
+        ? QStringLiteral("macos-aarch64") : QStringLiteral("macos-x86_64");
 #else
-    QString arch = (QSysInfo::buildCpuArchitecture() == "arm64") ? "aarch64" : "x86_64";
-    return prefix + "-linux-" + arch;
+    return (QSysInfo::buildCpuArchitecture() == "arm64")
+        ? QStringLiteral("linux-aarch64") : QStringLiteral("linux-x86_64");
+#endif
+}
+
+QString ReleaseUpdater::platformAssetName(const QString &prefix)
+{
+#ifdef Q_OS_WIN
+    return prefix + "-" + platformKey() + ".zip";
+#else
+    return prefix + "-" + platformKey();
 #endif
 }
 
@@ -132,15 +148,107 @@ QString strippedVersion(const QString &tagName)
 
 void ReleaseUpdater::checkLatest()
 {
-    // remember when a check happened (shown in settings; M9 throttle
-    // will build on this key)
+    // remember when a check happened (shown in settings; drives the M9
+    // throttle regardless of which source answers)
     Platform::appSettings().setValue(
         QStringLiteral("updater/lastCheckAt/") + m_installName,
         QDateTime::currentMSecsSinceEpoch());
 
-    auto *reply = m_nam->get(makeRequest(QUrl(QString(GITHUB_API) + "/" + m_apiPath)));
+    fetchStaticIndex();
+}
+
+// M9: the static updates.json index (gh-pages) is checked first — it is
+// one small request with no rate limit. The GitHub API is the fallback
+// for anything the index cannot answer.
+//
+// Index format (keyed by install name, assets keyed by platform):
+// {
+//   "herdr": { "version": "0.9.2", "tagName": "v0.9.2",
+//              "htmlUrl": "https://…/tag/v0.9.2",
+//              "assets": { "linux-x86_64": {"url": "…", "sha256": "hex"}, … } },
+//   "mudi":  { … }
+// }
+void ReleaseUpdater::fetchStaticIndex()
+{
+    QString url = QString::fromLocal8Bit(qgetenv("MUDI_UPDATES_URL"));
+    if (url.trimmed().isEmpty()) {
+        url = QString::fromLatin1(UPDATES_JSON_URL);
+    }
+    // gh-pages sits behind a CDN; bust it so a fresh release is visible
+    QUrl requestUrl(url + (url.contains(QLatin1Char('?')) ? QLatin1Char('&') : QLatin1Char('?'))
+                    + QStringLiteral("t=") + QString::number(QDateTime::currentMSecsSinceEpoch()));
+
+    auto *reply = m_nam->get(makeRequest(requestUrl));
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "static update index unavailable for" << m_installName
+                     << "(" << reply->errorString() << "), falling back to the API";
+            fetchApiLatest(); // index absent (404) or unreachable: API fallback
+            return;
+        }
+
+        QJsonParseError parseError;
+        const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &parseError);
+        const QJsonObject index = doc.object();
+        const QJsonObject entry = index.value(m_installName).toObject();
+        if (parseError.error != QJsonParseError::NoError || entry.isEmpty()) {
+            qDebug() << "static update index has no entry for" << m_installName
+                     << ", falling back to the API";
+            fetchApiLatest(); // not listed yet in the index
+            return;
+        }
+
+        Release release;
+        release.tagName = entry.value("tagName").toString();
+        release.version = entry.value("version").toString();
+        release.htmlUrl = entry.value("htmlUrl").toString();
+        const QJsonObject asset = entry.value("assets").toObject()
+                                      .value(platformKey()).toObject();
+        release.assetUrl = asset.value("url").toString();
+        release.sha256 = asset.value("sha256").toString();
+        if (release.version.isEmpty() || release.assetUrl.isEmpty()
+                || release.sha256.isEmpty()) {
+            // incomplete entry (e.g. digest missing): fail closed via the API
+            fetchApiLatest();
+            return;
+        }
+        emitCheckResult(true, release, {});
+    });
+}
+
+void ReleaseUpdater::fetchApiLatest()
+{
+    // Conditional request (M9): replay the cached ETag so GitHub answers
+    // 304 "not modified" — that response does not count against the
+    // 60/h anonymous rate limit, and we serve the cached release.
+    QSettings s = Platform::appSettings();
+    const QString cacheKey = QStringLiteral("updater/cache/") + m_installName;
+    const QString etag = s.value(cacheKey + QStringLiteral("/etag")).toString();
+
+    QNetworkRequest req = makeRequest(QUrl(QString(GITHUB_API) + "/" + m_apiPath));
+    if (!etag.isEmpty()) {
+        req.setRawHeader(QByteArrayLiteral("If-None-Match"), etag.toUtf8());
+    }
+    auto *reply = m_nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+
+        const int status = reply->attribute(
+            QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (status == 304) {
+            const Release cached = cachedRelease();
+            if (!cached.version.isEmpty() && !cached.assetUrl.isEmpty()) {
+                qDebug() << "update check: 304 for" << m_installName
+                         << "serving cached release" << cached.version;
+                emitCheckResult(true, cached, {});
+            } else {
+                emitCheckResult(false, Release{},
+                                QStringLiteral("not modified but the release cache is empty"));
+            }
+            return;
+        }
+
         Release release;
         if (reply->error() != QNetworkReply::NoError) {
             emitCheckResult(false, release, reply->errorString());
@@ -178,8 +286,34 @@ void ReleaseUpdater::checkLatest()
                             QStringLiteral("no release asset for this platform (%1)").arg(want));
             return;
         }
+
+        // cache the fresh answer (ETag + release) for future 304s
+        const QString cacheKey = QStringLiteral("updater/cache/") + m_installName;
+        {
+            QSettings store = Platform::appSettings();
+            store.setValue(cacheKey + QStringLiteral("/etag"),
+                           reply->header(QNetworkRequest::ETagHeader).toString());
+            store.setValue(cacheKey + QStringLiteral("/version"), release.version);
+            store.setValue(cacheKey + QStringLiteral("/tagName"), release.tagName);
+            store.setValue(cacheKey + QStringLiteral("/assetUrl"), release.assetUrl);
+            store.setValue(cacheKey + QStringLiteral("/sha256"), release.sha256);
+            store.setValue(cacheKey + QStringLiteral("/htmlUrl"), release.htmlUrl);
+        }
         emitCheckResult(true, release, {});
     });
+}
+
+ReleaseUpdater::Release ReleaseUpdater::cachedRelease() const
+{
+    QSettings s = Platform::appSettings();
+    const QString cacheKey = QStringLiteral("updater/cache/") + m_installName;
+    Release release;
+    release.version = s.value(cacheKey + QStringLiteral("/version")).toString();
+    release.tagName = s.value(cacheKey + QStringLiteral("/tagName")).toString();
+    release.assetUrl = s.value(cacheKey + QStringLiteral("/assetUrl")).toString();
+    release.sha256 = s.value(cacheKey + QStringLiteral("/sha256")).toString();
+    release.htmlUrl = s.value(cacheKey + QStringLiteral("/htmlUrl")).toString();
+    return release;
 }
 
 void ReleaseUpdater::emitCheckResult(bool ok, const Release &release, const QString &error)

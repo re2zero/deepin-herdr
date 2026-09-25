@@ -28,6 +28,11 @@ QSettings appSettings();
 QString logFilePath();
 void appendLogFile(QtMsgType type, const QString &message);
 
+// True when this mudi install is governed by dpkg (deb package): the
+// app must not self-update then, the package manager does. MUDI_FORCE_PORTABLE=1
+// overrides for testing portable behavior on a deb-managed machine.
+bool isDebManaged();
+
 // One-time import from the pre-rename deepin-herdr store (runs in
 // main() before anything reads settings).
 void migrateLegacySettings();

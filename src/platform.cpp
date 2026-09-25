@@ -113,6 +113,18 @@ void migrateLegacySettings()
     }
 }
 
+bool isDebManaged()
+{
+    // dpkg ownership marker written for every installed package
+    static const bool cached = []() {
+        if (qEnvironmentVariableIsSet("MUDI_FORCE_PORTABLE")) {
+            return false;
+        }
+        return QFileInfo::exists(QStringLiteral("/var/lib/dpkg/info/mudi.list"));
+    }();
+    return cached;
+}
+
 bool useDtk()
 {
     static const bool cached = []() {

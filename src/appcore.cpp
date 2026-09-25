@@ -33,6 +33,8 @@
 #include <QSystemTrayIcon>
 #include <QTime>
 #include <QTimer>
+#include <QDateTime>
+#include <QDebug>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWidget>
@@ -61,6 +63,9 @@ constexpr int BANNER_CONNECT_SERVER = 3;
 constexpr int BANNER_RETRY_SERVER = 4;
 constexpr int BANNER_RESTART_SERVER = 5;
 constexpr int AUTO_CHECK_DELAY_MS = 4000;
+// M9: one background check per updater per window (G5: the anonymous
+// GitHub API quota is 60/h and every launch used to spend two checks)
+constexpr qint64 AUTO_CHECK_THROTTLE_MS = 6LL * 60 * 60 * 1000;
 // server restore can restart every pane's agent process; 13 workspaces
 // easily take over a minute, so the launch window is generous
 constexpr int LAUNCH_MAX_ATTEMPTS = 120;      // x 500ms = 60s
@@ -297,6 +302,8 @@ void AppCore::initUpdateSystem()
         }
         if (m_herdrVersion.isEmpty()
             || ReleaseUpdater::compareVersions(release.version, m_herdrVersion) <= 0) {
+            qDebug() << "herdr update banner not queued: ok" << ok
+                     << "local" << m_herdrVersion << "remote" << release.version;
             return;
         }
         QSettings store = Platform::appSettings();
@@ -320,9 +327,14 @@ void AppCore::initUpdateSystem()
         if (store.value("skippedAppVersion").toString() == release.version) {
             return;
         }
+        // M9/G6: a deb-managed install belongs to the package manager —
+        // offer the releases page; a portable build can self-update.
+        const bool debManaged = Platform::isDebManaged();
+        qDebug() << "herdr/mudi update banner queued:" << release.version
+                 << "deb-managed:" << debManaged;
         queueBanner(BANNER_APP,
                     tr("MuDi %1 is available").arg(release.version),
-                    tr("View"), release);
+                    debManaged ? tr("View") : tr("Update"), release);
     });
 
     // Banner actions
@@ -345,10 +357,27 @@ void AppCore::initUpdateSystem()
             m_banner->hide();
             showNextBanner();
             requestServerRestart();
+        } else if (m_currentBanner.kind == BANNER_APP && !Platform::isDebManaged()) {
+            // portable build: install the downloaded binary, restart applies it
+            m_banner->showProgress(0);
+            m_appUpdater->downloadAndInstall(m_currentBanner.release);
         } else {
             QDesktopServices::openUrl(QUrl(m_appUpdater->releasesPageUrl()));
             m_banner->hide();
             showNextBanner();
+        }
+    });
+
+    // Portable self-update outcome (deb installs never get here).
+    connect(m_appUpdater, &ReleaseUpdater::installFinished, this,
+            [this](bool ok, const QString &error) {
+        if (!m_banner->isVisible() || m_currentBanner.kind != BANNER_APP) {
+            return; // install was started elsewhere (settings page)
+        }
+        if (ok) {
+            m_banner->showDone(tr("MuDi updated — restart the app to apply."));
+        } else {
+            m_banner->showError(tr("MuDi update failed: %1").arg(error));
         }
     });
 
@@ -397,8 +426,26 @@ void AppCore::autoCheckUpdates()
     if (!settings.value("autoCheckUpdates", true).toBool()) {
         return;
     }
-    m_herdrUpdater->checkLatest();
-    m_appUpdater->checkLatest();
+
+    // M9 throttle: at most one background check per updater within the
+    // window (the GitHub API quota is 60/h and each check costs one).
+    // Manual checks from the settings page are never throttled.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    auto throttled = [&settings, now](const char *installName) {
+        const qint64 last = settings.value(
+            QStringLiteral("updater/lastCheckAt/") + QLatin1String(installName), 0).toLongLong();
+        return last > 0 && now - last < AUTO_CHECK_THROTTLE_MS;
+    };
+    if (throttled(HERDR_BINARY)) {
+        qInfo() << "herdr update check skipped (checked within the last 6h)";
+    } else {
+        m_herdrUpdater->checkLatest();
+    }
+    if (throttled("mudi")) {
+        qInfo() << "mudi update check skipped (checked within the last 6h)";
+    } else {
+        m_appUpdater->checkLatest();
+    }
 }
 
 void AppCore::queueBanner(int kind, const QString &title, const QString &actionText,
@@ -455,6 +502,9 @@ void AppCore::showNextBanner()
         return;
     }
     m_currentBanner = m_bannerQueue.takeFirst();
+    qDebug() << "banner shown: kind" << m_currentBanner.kind
+             << "version" << m_currentBanner.release.version
+             << "queued left:" << m_bannerQueue.size();
     m_banner->showUpdate(m_currentBanner.title, m_currentBanner.actionText);
 }
 

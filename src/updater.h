@@ -45,6 +45,9 @@ public:
     void cancelDownload();
     bool isDownloading() const { return m_saveFile != nullptr; }
 
+    // "linux-x86_64", "macos-aarch64", … — the platform key used by the
+    // static updates.json index and derived asset names
+    static QString platformKey();
     static QString platformAssetName(const QString &prefix);
 
     // Human-landing page for this project, e.g. https://github.com/OWNER/NAME/releases
@@ -62,6 +65,13 @@ signals:
     void installFinished(bool ok, const QString &errorString);
 
 private:
+    // M9 check pipeline: static updates.json index first, GitHub API as
+    // the fallback; the API call carries If-None-Match so a 304 answer
+    // (served from the cached release) does not burn rate-limit quota.
+    void fetchStaticIndex();
+    void fetchApiLatest();
+    Release cachedRelease() const;
+
     void startDownloadChain(const QStringList &urls);
     void tryNextUrl();
     void finishAttempt(bool ok, const QString &error);
