@@ -1,19 +1,28 @@
 #include "platform.h"
 
+#include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QLabel>
 #include <QMessageBox>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QPointer>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScreen>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QStyle>
 #include <QStyleHints>
+#include <QTextStream>
 #include <QTranslator>
 #include <QVBoxLayout>
+
+#include "settingsstyle.h"
 
 #if HAVE_DTK
 #include <DApplication>
@@ -29,6 +38,54 @@ namespace Platform {
 QSettings appSettings()
 {
     return QSettings(QStringLiteral("mudi"), QStringLiteral("mudi"));
+}
+
+// Rotating file log (M10): ~/.local/share/mudi/logs/mudi.log with one
+// rolled-over generation. Every message type is captured; the stderr
+// filtering stays in main.cpp's handler. ~2×1MB per platform.
+static constexpr qint64 LOG_MAX_BYTES = 1024 * 1024;
+static QMutex g_logMutex;
+
+QString logFilePath()
+{
+    QString base = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    if (base.isEmpty()) {
+        base = QCoreApplication::applicationDirPath();
+    }
+    return base + QStringLiteral("/logs/mudi.log");
+}
+
+void appendLogFile(QtMsgType type, const QString &message)
+{
+    // no application instance yet — the log location is not stable and
+    // QCoreApplication::applicationDirPath() would abort
+    if (!QCoreApplication::instance()) {
+        return;
+    }
+    QMutexLocker lock(&g_logMutex);
+    const QString path = logFilePath();
+    QDir dir(QFileInfo(path).absolutePath());
+    if (!dir.exists()) {
+        QDir parent = QDir::root();
+        parent.mkpath(QFileInfo(path).absolutePath());
+    }
+
+    // roll over once the active file grows past the budget
+    QFileInfo info(path);
+    if (info.size() > LOG_MAX_BYTES) {
+        QFile::remove(path + QStringLiteral(".1"));
+        QFile::rename(path, path + QStringLiteral(".1"));
+    }
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        return;
+    }
+    static const char *kTypes[] = { "DEBUG", "WARN", "CRIT", "FATAL", "INFO" };
+    const char *typeName = (type >= 0 && type <= 4) ? kTypes[type] : "MSG";
+    QTextStream stream(&file);
+    stream << QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"))
+           << ' ' << typeName << ' ' << message << '\n';
 }
 
 void migrateLegacySettings()
@@ -237,7 +294,7 @@ void showContentDialog(QWidget *content, const QString &title, QWidget *parent,
         auto *dlg = new DDialog(parent);
         // no DDialog heading: content pages carry their own titles
         dlg->addContent(content); // dialog takes ownership
-        dlg->addButton(QObject::tr("OK"));
+        dlg->addButton(QObject::tr("OK"), true, DDialog::ButtonRecommend);
         dlg->setCloseButtonVisible(true);
         QObject::connect(dlg, &DDialog::closed, dlg, [dlg, onPersist] {
             onPersist();
@@ -252,7 +309,15 @@ void showContentDialog(QWidget *content, const QString &title, QWidget *parent,
     auto *layout = new QVBoxLayout(dlg);
     layout->addWidget(content);
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok, dlg);
+    if (auto *okBtn = buttons->button(QDialogButtonBox::Ok)) {
+        // same accent button the DTK shell paints for suggestions
+        okBtn->setProperty("primary", QStringLiteral("true"));
+        okBtn->setMinimumWidth(96);
+    }
     layout->addWidget(buttons);
+    // the dialog chrome sits outside the content widget's stylesheet
+    // scope; re-apply so the OK button picks up the settings language
+    dlg->setStyleSheet(SettingsStyle::baseQss(SettingsStyle::isDark(dlg->palette())));
     QObject::connect(buttons, &QDialogButtonBox::accepted, dlg, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
     QObject::connect(dlg, &QDialog::finished, dlg, [dlg, onPersist](int) {

@@ -22,6 +22,12 @@ bool useDtk();
 // single source of truth.
 QSettings appSettings();
 
+// Full path of the rotating log file (the logs/ directory is created on
+// demand). Shown in the settings' about page; written by main.cpp's
+// message handler.
+QString logFilePath();
+void appendLogFile(QtMsgType type, const QString &message);
+
 // One-time import from the pre-rename deepin-herdr store (runs in
 // main() before anything reads settings).
 void migrateLegacySettings();

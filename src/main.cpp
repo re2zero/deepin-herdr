@@ -18,6 +18,9 @@ static void messageHandler(QtMsgType type, const QMessageLogContext &ctx, const 
     if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) {
         fprintf(stderr, "[mudi] %s\n", qPrintable(msg));
     }
+    // M10: everything also lands in the rotating file log (see the
+    // settings' about page for the path)
+    Platform::appendLogFile(type, msg);
 }
 
 int main(int argc, char *argv[]) {

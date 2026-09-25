@@ -6,6 +6,7 @@ Makefile
 !CMakeLists.txt
 /mudi
 build/
+build-dtk/
 debian/.debhelper/
 debian/debhelper-build-stamp
 debian/mudi.substvars

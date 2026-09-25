@@ -2,6 +2,7 @@
 #include "platform.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -91,6 +92,20 @@ QString ReleaseUpdater::releasesPageUrl() const
     return QString(GITHUB_BASE) + "/" + repo + "/releases";
 }
 
+QString ReleaseUpdater::projectPageUrl() const
+{
+    // "repos/OWNER/NAME/releases/latest" -> "https://github.com/OWNER/NAME"
+    QString repo = m_apiPath;
+    if (repo.startsWith(QStringLiteral("repos/"))) {
+        repo.remove(0, 6);
+    }
+    const int latest = repo.indexOf(QStringLiteral("/releases/latest"));
+    if (latest > 0) {
+        repo.truncate(latest);
+    }
+    return QString(GITHUB_BASE) + "/" + repo;
+}
+
 int ReleaseUpdater::compareVersions(const QString &a, const QString &b)
 {
     const QStringList as = a.split('.');
@@ -117,6 +132,12 @@ QString strippedVersion(const QString &tagName)
 
 void ReleaseUpdater::checkLatest()
 {
+    // remember when a check happened (shown in settings; M9 throttle
+    // will build on this key)
+    Platform::appSettings().setValue(
+        QStringLiteral("updater/lastCheckAt/") + m_installName,
+        QDateTime::currentMSecsSinceEpoch());
+
     auto *reply = m_nam->get(makeRequest(QUrl(QString(GITHUB_API) + "/" + m_apiPath)));
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();

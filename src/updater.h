@@ -50,6 +50,9 @@ public:
     // Human-landing page for this project, e.g. https://github.com/OWNER/NAME/releases
     QString releasesPageUrl() const;
 
+    // Repo landing page, e.g. https://github.com/OWNER/NAME (feedback link)
+    QString projectPageUrl() const;
+
     // Returns -1, 0 or 1. Numeric per segment ("0.9" < "0.10.1").
     static int compareVersions(const QString &a, const QString &b);
 

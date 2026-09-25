@@ -31,6 +31,7 @@
 #include <QShortcut>
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
+#include <QTime>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QVariant>
@@ -768,11 +769,40 @@ void AppCore::startAgentMonitor()
     m_agentMonitor->start();
 }
 
+// Do-not-disturb window from the settings ("HH:mm-HH:mm", may cross
+// midnight, e.g. "23:00-08:00"). Empty key = filtering off.
+static bool withinDndWindow()
+{
+    const QString window = Platform::appSettings().value("dndWindow").toString().trimmed();
+    if (window.isEmpty()) {
+        return false;
+    }
+    const int dash = window.indexOf(QLatin1Char('-'));
+    if (dash <= 0) {
+        return false;
+    }
+    const QTime start = QTime::fromString(window.left(dash).trimmed(), QStringLiteral("HH:mm"));
+    const QTime end = QTime::fromString(window.mid(dash + 1).trimmed(), QStringLiteral("HH:mm"));
+    if (!start.isValid() || !end.isValid()) {
+        return false;
+    }
+    const QTime now = QTime::currentTime();
+    if (start <= end) {
+        return now >= start && now <= end;
+    }
+    return now >= start || now <= end;
+}
+
 void AppCore::onAgentAttention(const QString &paneId, const QString &agent,
                                const QString &title, const QString &cwd, const QString &status)
 {
     // the user is already looking at the app
     if (m_container->window()->isActiveWindow()) {
+        return;
+    }
+
+    // do-not-disturb: tray badge/tooltip still update, notifications sleep
+    if (withinDndWindow()) {
         return;
     }
 

@@ -94,6 +94,7 @@ set(SOURCES
     src/appcore.cpp
     src/platform.cpp
     src/settingsdialog.cpp
+    src/settingsstyle.cpp
     src/updatebanner.cpp
     src/updater.cpp
     src/agentmonitor.cpp
@@ -105,6 +106,7 @@ set(HEADERS
     src/appcore.h
     src/platform.h
     src/settingsdialog.h
+    src/settingsstyle.h
     src/updatebanner.h
     src/updater.h
     src/agentmonitor.h
